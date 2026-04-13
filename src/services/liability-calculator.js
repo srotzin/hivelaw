@@ -100,7 +100,7 @@ export async function assessLiability({
   const insurancePremium = recommendedCoverage * (0.02 + riskScore * 0.08); // 2-10% of coverage
 
   // 5. Find similar cases
-  const similarCases = searchBroad(outputText.substring(0, 200), { jurisdiction, topK: 3 });
+  const similarCases = await searchBroad(outputText.substring(0, 200), { jurisdiction, topK: 3 });
 
   return createLiabilityAssessment({
     agentDid,

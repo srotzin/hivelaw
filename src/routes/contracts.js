@@ -58,47 +58,60 @@ router.post('/create', requireDID, requirePayment(0.05, 'Contract Creation'), as
 /**
  * GET /v1/contracts/:contractId — Get contract details.
  */
-router.get('/:contractId', requireDID, (req, res) => {
-  const contract = getContract(req.params.contractId);
-  if (!contract) return res.status(404).json({ success: false, error: 'Contract not found.' });
-  if (!isPartyToContract(req.params.contractId, req.agentDid)) {
-    return res.status(403).json({ success: false, error: 'You are not a party to this contract.' });
+router.get('/:contractId', requireDID, async (req, res) => {
+  try {
+    const contract = await getContract(req.params.contractId);
+    if (!contract) return res.status(404).json({ success: false, error: 'Contract not found.' });
+    if (!(await isPartyToContract(req.params.contractId, req.agentDid))) {
+      return res.status(403).json({ success: false, error: 'You are not a party to this contract.' });
+    }
+    return res.json({ success: true, data: contract });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch contract.', detail: err.message });
   }
-  return res.json({ success: true, data: contract });
 });
 
 /**
  * POST /v1/contracts/:contractId/complete — Mark contract as completed.
  */
-router.post('/:contractId/complete', requireDID, (req, res) => {
-  const { performance_rating, notes } = req.body;
-  if (!isPartyToContract(req.params.contractId, req.agentDid)) {
-    return res.status(403).json({ success: false, error: 'You are not a party to this contract.' });
+router.post('/:contractId/complete', requireDID, async (req, res) => {
+  try {
+    const { performance_rating, notes } = req.body;
+    if (!(await isPartyToContract(req.params.contractId, req.agentDid))) {
+      return res.status(403).json({ success: false, error: 'You are not a party to this contract.' });
+    }
+
+    const contract = await completeContract(req.params.contractId, {
+      performanceRating: performance_rating ?? 1.0,
+      notes,
+    });
+    if (!contract) return res.status(404).json({ success: false, error: 'Contract not found.' });
+
+    // Feed rating back to HiveTrust
+    const providerImpact = Math.round((performance_rating - 0.5) * 20);
+    updateReputation(contract.parties.provider.did, providerImpact);
+    logTelemetry(req.agentDid, 'contract_completed', { contract_id: contract.contract_id });
+
+    return res.json({
+      success: true,
+      data: contract,
+      meta: { reputation_update_sent: true, provider_impact: providerImpact },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to complete contract.', detail: err.message });
   }
-
-  const contract = completeContract(req.params.contractId, {
-    performanceRating: performance_rating ?? 1.0,
-    notes,
-  });
-  if (!contract) return res.status(404).json({ success: false, error: 'Contract not found.' });
-
-  // Feed rating back to HiveTrust
-  const providerImpact = Math.round((performance_rating - 0.5) * 20);
-  updateReputation(contract.parties.provider.did, providerImpact);
-  logTelemetry(req.agentDid, 'contract_completed', { contract_id: contract.contract_id });
-
-  return res.json({
-    success: true,
-    data: contract,
-    meta: { reputation_update_sent: true, provider_impact: providerImpact },
-  });
 });
 
 /**
  * GET /v1/contracts/stats/overview — Contract statistics.
  */
-router.get('/stats/overview', requireDID, (req, res) => {
-  return res.json({ success: true, data: getContractStats() });
+router.get('/stats/overview', requireDID, async (req, res) => {
+  try {
+    const stats = await getContractStats();
+    return res.json({ success: true, data: stats });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch stats.', detail: err.message });
+  }
 });
 
 export default router;

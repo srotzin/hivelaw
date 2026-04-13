@@ -66,13 +66,17 @@ router.post('/file', requireDID, requirePayment(0.25, 'Dispute Filing'), async (
 /**
  * GET /v1/disputes/:disputeId — Get dispute details.
  */
-router.get('/:disputeId', requireDID, (req, res) => {
-  const dispute = getDispute(req.params.disputeId);
-  if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found.' });
-  if (dispute.filed_by !== req.agentDid && dispute.filed_against !== req.agentDid) {
-    return res.status(403).json({ success: false, error: 'You are not a party to this dispute.' });
+router.get('/:disputeId', requireDID, async (req, res) => {
+  try {
+    const dispute = await getDispute(req.params.disputeId);
+    if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found.' });
+    if (dispute.filed_by !== req.agentDid && dispute.filed_against !== req.agentDid) {
+      return res.status(403).json({ success: false, error: 'You are not a party to this dispute.' });
+    }
+    return res.json({ success: true, data: dispute });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch dispute.', detail: err.message });
   }
-  return res.json({ success: true, data: dispute });
 });
 
 /**
@@ -114,8 +118,13 @@ router.post('/:disputeId/appeal', requireDID, requirePayment(0.50, 'Dispute Appe
 /**
  * GET /v1/disputes/stats/overview — Dispute statistics.
  */
-router.get('/stats/overview', requireDID, (req, res) => {
-  return res.json({ success: true, data: getDisputeStats() });
+router.get('/stats/overview', requireDID, async (req, res) => {
+  try {
+    const stats = await getDisputeStats();
+    return res.json({ success: true, data: stats });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch stats.', detail: err.message });
+  }
 });
 
 export default router;
