@@ -85,7 +85,7 @@ export async function addCase(caseData, source = 'organic') {
       ]);
       return caseData;
     } catch (err) {
-      console.error('[case-law-db] INSERT failed:', err.message, err.detail || '');
+      console.error('[case-law-db] INSERT failed:', err.message, err.detail || '', 'Code:', err.code || '');
     }
   }
 

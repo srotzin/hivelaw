@@ -79,7 +79,7 @@ export async function initDatabase() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS hivelaw.case_law (
         case_id TEXT PRIMARY KEY,
-        dispute_id TEXT REFERENCES hivelaw.disputes(dispute_id),
+        dispute_id TEXT,
         category TEXT NOT NULL,
         jurisdiction TEXT NOT NULL,
         summary TEXT NOT NULL,
@@ -94,6 +94,11 @@ export async function initDatabase() {
         filed_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+
+    // Drop FK constraint if exists (allows synthetic case law seeding)
+    await pool.query(`
+      ALTER TABLE hivelaw.case_law DROP CONSTRAINT IF EXISTS case_law_dispute_id_fkey
+    `).catch(() => {});
 
     await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_caselaw_dispute_id ON hivelaw.case_law(dispute_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_caselaw_category ON hivelaw.case_law(category)');
