@@ -164,17 +164,26 @@ app.post('/v1/admin/seed-case-law', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Admin key required.' });
   }
 
+  const errors = [];
   try {
     await seedCaseLaw();
-    await seedSyntheticCaseLaw(true);
-
-    return res.json({
-      success: true,
-      data: { base_cases: 5, synthetic_cases: 50, total: 55 },
-    });
   } catch (err) {
-    return res.status(500).json({ success: false, error: 'Seeding failed.', detail: err.message });
+    errors.push({ step: 'seedCaseLaw', error: err.message, detail: err.detail || '' });
   }
+  try {
+    await seedSyntheticCaseLaw(true);
+  } catch (err) {
+    errors.push({ step: 'seedSyntheticCaseLaw', error: err.message, detail: err.detail || '' });
+  }
+
+  if (errors.length > 0) {
+    return res.status(500).json({ success: false, error: 'Seeding partially failed.', errors });
+  }
+
+  return res.json({
+    success: true,
+    data: { base_cases: 5, synthetic_cases: 50, total: 55 },
+  });
 });
 
 // ─── 404 Handler ─────────────────────────────────────────────────────

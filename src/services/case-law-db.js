@@ -66,7 +66,7 @@ export async function addCase(caseData, source = 'organic') {
            key_factors, outcome, damages_usdc, embedding, source, cited_by,
            jurisdiction_applicability, filed_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        ON CONFLICT (dispute_id) DO NOTHING
+        ON CONFLICT (case_id) DO NOTHING
       `, [
         caseData.case_id,
         caseData.dispute_id || null,
@@ -85,7 +85,7 @@ export async function addCase(caseData, source = 'organic') {
       ]);
       return caseData;
     } catch (err) {
-      console.error('[case-law-db] INSERT failed, falling back to memory:', err.message);
+      console.error('[case-law-db] INSERT failed:', err.message, err.detail || '');
     }
   }
 

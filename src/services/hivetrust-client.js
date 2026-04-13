@@ -1,5 +1,6 @@
 const HIVETRUST_API_URL = process.env.HIVETRUST_API_URL || 'https://hivetrust.onrender.com';
 const HIVE_INTERNAL_KEY = process.env.HIVE_INTERNAL_KEY || '';
+const HIVETRUST_API_KEY = process.env.HIVETRUST_API_KEY || HIVE_INTERNAL_KEY;
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
 export async function verifyDID(did) {
@@ -8,7 +9,7 @@ export async function verifyDID(did) {
   }
   try {
     const res = await fetch(`${HIVETRUST_API_URL}/v1/agents/${encodeURIComponent(did)}`, {
-      headers: { 'X-Hive-Internal-Key': HIVE_INTERNAL_KEY },
+      headers: { 'X-API-Key': HIVETRUST_API_KEY },
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return { valid: false, did, status: 'not_found', score: 0 };
@@ -30,7 +31,7 @@ export function updateReputation(did, impact) {
   // Fire-and-forget reputation update to HiveTrust
   fetch(`${HIVETRUST_API_URL}/v1/reputation/update`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Hive-Internal-Key': HIVE_INTERNAL_KEY },
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': HIVETRUST_API_KEY },
     body: JSON.stringify({ did, impact, source: 'hivelaw-arbitration', timestamp: new Date().toISOString() }),
     signal: AbortSignal.timeout(3000),
   }).catch(() => {});
@@ -40,7 +41,7 @@ export function logTelemetry(did, action, metadata = {}) {
   if (IS_DEV && did.startsWith('did:hive:test_agent_')) return;
   fetch(`${HIVETRUST_API_URL}/v1/telemetry/ingest`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Hive-Internal-Key': HIVE_INTERNAL_KEY },
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': HIVETRUST_API_KEY },
     body: JSON.stringify({ did, action, platform: 'hivelaw', timestamp: new Date().toISOString(), ...metadata }),
     signal: AbortSignal.timeout(3000),
   }).catch(() => {});
