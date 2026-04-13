@@ -3,18 +3,24 @@ const HIVE_INTERNAL_KEY = process.env.HIVE_INTERNAL_KEY || '';
 const HIVETRUST_API_KEY = process.env.HIVETRUST_API_KEY || HIVE_INTERNAL_KEY;
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
+/** Strip did:hive: prefix to get the UUID for HiveTrust API calls */
+function didToUuid(did) {
+  return did.replace(/^did:hive:/, '');
+}
+
 export async function verifyDID(did) {
   if (IS_DEV && did.startsWith('did:hive:test_agent_')) {
     return { valid: true, did, status: 'active', score: 850, tier: 'sovereign', source: 'dev-mode' };
   }
   try {
-    const res = await fetch(`${HIVETRUST_API_URL}/v1/agents/${encodeURIComponent(did)}`, {
+    const uuid = didToUuid(did);
+    const res = await fetch(`${HIVETRUST_API_URL}/v1/agents/${encodeURIComponent(uuid)}`, {
       headers: { 'X-API-Key': HIVETRUST_API_KEY },
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return { valid: false, did, status: 'not_found', score: 0 };
     const data = await res.json();
-    return { valid: true, did, status: 'active', score: data.data?.reputation_score || 500, tier: data.data?.trust_level || 'standard', source: 'hivetrust-api' };
+    return { valid: true, did, status: 'active', score: data.data?.reputation_score || data.data?.agent?.trust_score || 500, tier: data.data?.trust_level || data.data?.agent?.trust_tier || 'standard', source: 'hivetrust-api' };
   } catch {
     return IS_DEV
       ? { valid: true, did, status: 'active', score: 500, tier: 'standard', source: 'fallback-dev' }
