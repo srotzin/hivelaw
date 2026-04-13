@@ -3,6 +3,7 @@ import { requireDID } from '../middleware/auth.js';
 import { requirePayment } from '../middleware/x402.js';
 import { createContract, getContract, completeContract, isPartyToContract, getContractStats } from '../services/contract-engine.js';
 import { updateReputation, logTelemetry } from '../services/hivetrust-client.js';
+import { createSaga, advanceSaga } from '../services/saga-orchestrator.js';
 
 const router = Router();
 
@@ -39,6 +40,15 @@ router.post('/create', requireDID, requirePayment(0.05, 'Contract Creation'), as
       contract_id: result.contract.contract_id,
       jurisdiction,
     });
+
+    // Create contract saga for cross-platform orchestration
+    const sagaId = await createSaga('contract', {
+      contract_id: result.contract.contract_id,
+      provider_did: parties.provider_did,
+      consumer_did: parties.consumer_did,
+      jurisdiction,
+    });
+    await advanceSaga(sagaId, 'law_create_contract', { contract_id: result.contract.contract_id });
 
     return res.status(201).json({
       success: true,

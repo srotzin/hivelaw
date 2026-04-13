@@ -1,3 +1,12 @@
+import * as Sentry from '@sentry/node';
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || '',
+  environment: process.env.NODE_ENV || 'development',
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  enabled: !!process.env.SENTRY_DSN,
+});
+
 import express from 'express';
 import cors from 'cors';
 import contractRoutes from './routes/contracts.js';
@@ -15,6 +24,8 @@ import { getJurisdictionCount, seedJurisdictions } from './services/jurisdiction
 import { getDisputeStats } from './services/arbitration-engine.js';
 import { logTelemetry } from './services/hivetrust-client.js';
 import { initDatabase, checkHealth, isDbAvailable } from './services/db.js';
+import { sendAlert } from './services/alerts.js';
+import { startSagaWorker } from './services/saga-orchestrator.js';
 
 const app = express();
 const PORT = process.env.PORT || 3004;
@@ -195,11 +206,33 @@ app.use((req, res) => {
   });
 });
 
+// ─── Sentry Error Handler ───────────────────────────────────────────
+
+Sentry.setupExpressErrorHandler(app);
+
+// ─── Global Error Handler ───────────────────────────────────────────
+
+app.use((err, req, res, next) => {
+  Sentry.captureException(err);
+  sendAlert('critical', 'HiveLaw', `Unhandled error: ${err.message}`, {
+    path: req.path,
+    method: req.method,
+  });
+  res.status(500).json({ success: false, error: 'Internal server error.' });
+});
+
 // ─── Initialize & Start Server ──────────────────────────────────────
 
 async function start() {
   // 1. Initialize database (if DATABASE_URL is set)
   const dbReady = await initDatabase();
+
+  if (!dbReady && process.env.DATABASE_URL) {
+    sendAlert('critical', 'HiveLaw', 'Database connection failed', {
+      database_url: 'configured but unreachable',
+      fallback: 'in-memory mode',
+    });
+  }
 
   // 2. Seed jurisdictions into PostgreSQL
   if (dbReady) {
@@ -224,6 +257,12 @@ async function start() {
     console.log(`  Case Law:        ${caseLawStats.total_cases} precedents (${caseLawStats.embedding_mode})`);
     console.log(`  Vector Search:   ${caseLawStats.embedding_mode} (${caseLawStats.vector_dimensions}d)`);
     console.log(`  Env:             ${process.env.NODE_ENV || 'development'}\n`);
+
+    startSagaWorker();
+    sendAlert('info', 'HiveLaw', `Service started on port ${PORT}`, {
+      version: '1.0.0',
+      env: process.env.NODE_ENV || 'development',
+    });
   });
 }
 

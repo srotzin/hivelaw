@@ -3,6 +3,7 @@ import { requireDID } from '../middleware/auth.js';
 import { requirePayment } from '../middleware/x402.js';
 import { fileAndArbitrate, appealDispute, getDispute, getDisputeStats } from '../services/arbitration-engine.js';
 import { logTelemetry } from '../services/hivetrust-client.js';
+import { sendAlert } from '../services/alerts.js';
 
 const router = Router();
 
@@ -43,6 +44,13 @@ router.post('/file', requireDID, requirePayment(0.25, 'Dispute Filing'), async (
     logTelemetry(req.agentDid, 'dispute_filed', {
       dispute_id: result.dispute.dispute_id,
       category,
+      resolution_time_ms: result.dispute.arbitration.resolution_time_ms,
+    });
+
+    sendAlert('info', 'HiveLaw', `Dispute filed: ${result.dispute.dispute_id}`, {
+      category,
+      filed_by: req.agentDid,
+      contract_id: contract_id,
       resolution_time_ms: result.dispute.arbitration.resolution_time_ms,
     });
 
