@@ -151,7 +151,7 @@ app.get('/.well-known/hive-payments.json', (req, res) => {
       liability_assessment: { price_usdc: 0.05, description: 'Assess hallucination liability and insurance needs' },
       precedent_access: { price_usdc: 0.001, description: 'Query case law precedents with full details (data refinery)' },
     },
-    payment_methods: ['x402', 'stripe_subscription'],
+    payment_methods: ['x402_usdc'],
     network: 'Base L2',
     currency: 'USDC',
   });
