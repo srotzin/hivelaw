@@ -146,6 +146,26 @@ app.get('/.well-known/hive-payments.json', (req, res) => {
   });
 });
 
+// ─── Admin: Seed Case Law ───────────────────────────────────────
+
+app.post('/v1/admin/seed-case-law', async (req, res) => {
+  if (req.headers['x-hive-internal-key'] !== (process.env.HIVE_INTERNAL_KEY || 'hivelaw-dev-key')) {
+    return res.status(401).json({ success: false, error: 'Admin key required.' });
+  }
+
+  try {
+    await seedCaseLaw();
+    await seedSyntheticCaseLaw(true);
+
+    return res.json({
+      success: true,
+      data: { base_cases: 5, synthetic_cases: 50, total: 55 },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Seeding failed.', detail: err.message });
+  }
+});
+
 // ─── 404 Handler ─────────────────────────────────────────────────────
 
 app.use((req, res) => {
@@ -170,6 +190,7 @@ app.use((req, res) => {
       jurisdictions_compliance: 'GET /v1/jurisdictions/:code/compliance-check',
       liability_assess: 'POST /v1/liability/assess',
       payment_discovery: 'GET /.well-known/hive-payments.json',
+      admin_seed_case_law: 'POST /v1/admin/seed-case-law',
     },
   });
 });

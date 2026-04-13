@@ -526,9 +526,9 @@ const SYNTHETIC_CASES = [
   },
 ];
 
-export async function seedSyntheticCaseLaw() {
-  // Check if we already have enough cases
-  if (isDbAvailable()) {
+export async function seedSyntheticCaseLaw(force = false) {
+  // Check if we already have enough cases (skip check if force=true)
+  if (!force && isDbAvailable()) {
     try {
       const { rows } = await pool.query('SELECT COUNT(*) as cnt FROM hivelaw.case_law');
       if (parseInt(rows[0].cnt, 10) > 10) {

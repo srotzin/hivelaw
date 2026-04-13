@@ -95,6 +95,7 @@ export async function initDatabase() {
       )
     `);
 
+    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_caselaw_dispute_id ON hivelaw.case_law(dispute_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_caselaw_category ON hivelaw.case_law(category)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_caselaw_jurisdiction ON hivelaw.case_law(jurisdiction)');
 
