@@ -5,21 +5,16 @@ import { getContract, updateContractStatus } from './contract-engine.js';
 import { getReputationScore, updateReputation } from './hivetrust-client.js';
 import { getTransactionDetails } from './hiveagent-client.js';
 import { storeCaseLaw } from './hivemind-client.js';
+import pool, { isDbAvailable } from './db.js';
 
 /**
  * Automated Arbitration Engine — The core of HiveLaw.
- *
- * Sub-3-second dispute resolution:
- *   1. Validate dispute & gather evidence
- *   2. Search case law for precedent (cosine similarity, weighted by jurisdiction/category/recency)
- *   3. Score liability: evidence_strength * precedent_alignment * jurisdiction_rules
- *   4. Generate ruling with natural language reasoning citing specific precedent cases
- *   5. Calculate damages: claimed * liability_score * jurisdiction_cap
- *   6. Store as new case law precedent
+ * PostgreSQL-backed with in-memory fallback.
  */
 
+// ─── In-memory fallback ─────────────────────────────────────────────
 /** @type {Map<string, object>} dispute_id -> Dispute */
-const disputes = new Map();
+const memDisputes = new Map();
 
 /** @type {number} running average resolution time */
 let totalResolutions = 0;
@@ -37,7 +32,7 @@ export async function fileAndArbitrate({
 
   // ─── 1. Validate contract & determine parties ──────────────────
 
-  const contract = getContract(contractId);
+  const contract = await getContract(contractId);
   if (!contract) {
     return { error: 'Contract not found.', contract_id: contractId };
   }
@@ -80,12 +75,12 @@ export async function fileAndArbitrate({
   // ─── 4. Search case law for precedent ─────────────────────────
 
   const searchText = `${category} ${description} ${contract.terms.service_description || ''}`;
-  const precedents = searchBroad(searchText, {
+  const precedents = await searchBroad(searchText, {
     jurisdiction: contract.jurisdiction,
     topK: 5,
   });
 
-  const categoryPrecedents = searchCaseLaw(searchText, {
+  const categoryPrecedents = await searchCaseLaw(searchText, {
     category,
     jurisdiction: contract.jurisdiction,
     topK: 3,
@@ -133,7 +128,6 @@ export async function fileAndArbitrate({
   const favorFiler = liabilityScore >= 0.45;
   const inFavorOf = favorFiler ? filedBy : filedAgainst;
 
-  // Calculate damages
   let damagesAwarded = 0;
   let penaltyApplied = false;
 
@@ -144,7 +138,6 @@ export async function fileAndArbitrate({
       contract.terms.max_liability_usdc || maxDamages
     );
 
-    // Apply hallucination penalty if applicable
     if (category === 'hallucination' && hallucinationClause?.enabled) {
       const penalty = hallucinationClause.penalty_per_incident_usdc;
       damagesAwarded = Math.min(damagesAwarded + penalty, maxDamages);
@@ -152,7 +145,6 @@ export async function fileAndArbitrate({
     }
   }
 
-  // Reputation impact
   const reputationImpact = favorFiler
     ? { provider: isConsumer ? -Math.round(liabilityScore * 30) : 0, consumer: isConsumer ? 0 : -Math.round(liabilityScore * 30) }
     : { provider: 0, consumer: 0 };
@@ -204,7 +196,7 @@ export async function fileAndArbitrate({
 
   // ─── 11. Update contract status ──────────────────────────────
 
-  updateContractStatus(contractId, 'disputed');
+  await updateContractStatus(contractId, 'disputed');
 
   // ─── 12. Update reputation via HiveTrust (fire-and-forget) ───
 
@@ -228,11 +220,11 @@ export async function fileAndArbitrate({
     damagesUsdc: damagesAwarded,
     jurisdictionApplicability: [contract.jurisdiction],
   });
-  addCase(newCaseLaw);
+  await addCase(newCaseLaw, 'organic');
 
   // Mark precedents as cited by this new case
   for (const p of topPrecedents) {
-    addCitedBy(p.case_id, newCaseLaw.case_id);
+    await addCitedBy(p.case_id, newCaseLaw.case_id);
   }
 
   // Store in HiveMind (fire-and-forget)
@@ -245,7 +237,33 @@ export async function fileAndArbitrate({
 
   // ─── 15. Store dispute ───────────────────────────────────────
 
-  disputes.set(dispute.dispute_id, dispute);
+  if (isDbAvailable()) {
+    try {
+      await pool.query(`
+        INSERT INTO hivelaw.disputes
+          (dispute_id, contract_id, filed_by, filed_against, category, severity,
+           evidence, arbitration, status, filed_at, resolved_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `, [
+        dispute.dispute_id,
+        dispute.contract_id,
+        dispute.filed_by,
+        dispute.filed_against,
+        dispute.category,
+        dispute.severity,
+        JSON.stringify(dispute.evidence),
+        JSON.stringify(dispute.arbitration),
+        dispute.status,
+        dispute.filed_at,
+        dispute.arbitration.resolved_at,
+      ]);
+    } catch (err) {
+      console.error('[arbitration-engine] INSERT dispute failed, using memory:', err.message);
+      memDisputes.set(dispute.dispute_id, dispute);
+    }
+  } else {
+    memDisputes.set(dispute.dispute_id, dispute);
+  }
 
   return {
     dispute,
@@ -268,7 +286,7 @@ export async function appealDispute(disputeId, {
   grounds,
   additionalEvidence = {},
 }) {
-  const original = disputes.get(disputeId);
+  const original = await getDispute(disputeId);
   if (!original) return { error: 'Dispute not found.' };
   if (original.filed_by !== filedBy && original.filed_against !== filedBy) {
     return { error: 'You are not a party to this dispute.' };
@@ -277,22 +295,19 @@ export async function appealDispute(disputeId, {
     return { error: 'Can only appeal resolved disputes.' };
   }
 
-  // Re-run arbitration with broader precedent search and additional evidence
   original.status = 'appealed';
   original.arbitration.status = 'appealed';
 
-  const contract = getContract(original.contract_id);
+  const contract = await getContract(original.contract_id);
   const searchText = `${original.category} ${original.evidence.description} ${grounds} ${JSON.stringify(additionalEvidence)}`;
-  const broadPrecedents = searchBroad(searchText, {
+  const broadPrecedents = await searchBroad(searchText, {
     jurisdiction: contract?.jurisdiction,
     topK: 10,
   });
 
-  // Recalculate with appeal weighting
   const topPrecedents = broadPrecedents.slice(0, 7);
   const originalRuling = original.arbitration.ruling;
 
-  // Simple appeal logic: slight adjustment based on new evidence
   const adjustmentFactor = grounds === 'new_evidence' ? 0.15 : grounds === 'procedural_error' ? 0.10 : 0.05;
   const wasFilerWin = originalRuling.in_favor_of === original.filed_by;
   const appealerIsFiler = filedBy === original.filed_by;
@@ -314,26 +329,92 @@ export async function appealDispute(disputeId, {
     appealed_at: new Date().toISOString(),
   };
 
+  // Persist appeal
+  if (isDbAvailable()) {
+    try {
+      await pool.query(
+        `UPDATE hivelaw.disputes SET status = $1, arbitration = $2 WHERE dispute_id = $3`,
+        ['appealed', JSON.stringify({ ...original.arbitration, appeal: original.appeal }), disputeId]
+      );
+    } catch (err) {
+      console.error('[arbitration-engine] appeal update failed:', err.message);
+    }
+  }
+
   return original;
 }
 
-export function getDispute(disputeId) {
-  return disputes.get(disputeId) || null;
+export async function getDispute(disputeId) {
+  if (isDbAvailable()) {
+    try {
+      const { rows } = await pool.query(
+        'SELECT * FROM hivelaw.disputes WHERE dispute_id = $1', [disputeId]
+      );
+      if (rows.length === 0) return null;
+      return rowToDispute(rows[0]);
+    } catch (err) {
+      console.error('[arbitration-engine] getDispute query failed:', err.message);
+    }
+  }
+  return memDisputes.get(disputeId) || null;
 }
 
-export function getDisputeStats() {
+export async function getDisputeStats() {
+  if (isDbAvailable()) {
+    try {
+      const { rows } = await pool.query(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'resolved') as resolved,
+          COUNT(*) FILTER (WHERE status = 'open') as open,
+          COUNT(*) FILTER (WHERE status = 'appealed') as appealed
+        FROM hivelaw.disputes
+      `);
+      return {
+        total: parseInt(rows[0].total, 10),
+        resolved: parseInt(rows[0].resolved, 10),
+        open: parseInt(rows[0].open, 10),
+        appealed: parseInt(rows[0].appealed, 10),
+        avg_resolution_time_ms: totalResolutions > 0 ? Math.round(totalResolutionTimeMs / totalResolutions) : 0,
+      };
+    } catch (err) {
+      console.error('[arbitration-engine] getDisputeStats failed:', err.message);
+    }
+  }
+
   let resolved = 0, open = 0, appealed = 0;
-  for (const [, d] of disputes) {
+  for (const [, d] of memDisputes) {
     if (d.status === 'resolved') resolved++;
     else if (d.status === 'open') open++;
     else if (d.status === 'appealed') appealed++;
   }
   return {
-    total: disputes.size,
+    total: memDisputes.size,
     resolved,
     open,
     appealed,
     avg_resolution_time_ms: totalResolutions > 0 ? Math.round(totalResolutionTimeMs / totalResolutions) : 0,
+  };
+}
+
+// ─── Row mapper ─────────────────────────────────────────────────────
+
+function rowToDispute(row) {
+  const evidence = row.evidence || {};
+  const arbitration = row.arbitration || {};
+  return {
+    dispute_id: row.dispute_id,
+    contract_id: row.contract_id,
+    filed_by: row.filed_by,
+    filed_against: row.filed_against,
+    category: row.category,
+    severity: row.severity,
+    evidence,
+    arbitration,
+    status: row.status,
+    filed_at: row.filed_at instanceof Date ? row.filed_at.toISOString() : row.filed_at,
+    resolved_at: row.resolved_at instanceof Date ? row.resolved_at.toISOString() : row.resolved_at,
+    appeal: arbitration.appeal || undefined,
   };
 }
 
@@ -347,37 +428,30 @@ function classifySeverity(damages, category) {
 }
 
 function scoreEvidence(dispute, txDetails) {
-  let score = 0.3; // base
+  let score = 0.3;
 
-  // Description quality
   const descLen = dispute.evidence.description.length;
   if (descLen > 100) score += 0.15;
   if (descLen > 300) score += 0.10;
 
-  // Has transaction evidence
   if (txDetails) score += 0.20;
 
-  // Has supporting data
   if (Object.keys(dispute.evidence.supporting_data).length > 0) score += 0.15;
 
-  // Category-specific boosts
-  if (dispute.category === 'hallucination') score += 0.10; // hallucinations are easier to verify
-  if (dispute.category === 'overcharge' && txDetails) score += 0.15; // billing disputes with tx logs are strong
+  if (dispute.category === 'hallucination') score += 0.10;
+  if (dispute.category === 'overcharge' && txDetails) score += 0.15;
 
   return Math.min(1.0, score);
 }
 
 function scorePrecedentAlignment(precedents, category) {
-  if (precedents.length === 0) return 0.3; // no precedent, moderate uncertainty
+  if (precedents.length === 0) return 0.3;
 
-  // Average similarity of top precedents
   const avgSim = precedents.reduce((sum, p) => sum + p.similarity_score, 0) / precedents.length;
 
-  // Bonus for category matches
   const categoryMatches = precedents.filter(p => p.case.category === category).length;
   const categoryBonus = (categoryMatches / precedents.length) * 0.2;
 
-  // Bonus for provider-liable outcomes in precedent
   const liableOutcomes = precedents.filter(p => p.case.outcome === 'provider_liable').length;
   const outcomeBonus = (liableOutcomes / precedents.length) * 0.15;
 
@@ -385,16 +459,14 @@ function scorePrecedentAlignment(precedents, category) {
 }
 
 function getJurisdictionFactor(j, category) {
-  let factor = 0.5; // neutral default
+  let factor = 0.5;
 
-  // Stricter jurisdictions (EU, UK) have higher factor
   if (j.code === 'EU') factor = 0.75;
   else if (j.code === 'UK') factor = 0.65;
   else if (j.code === 'US-NY') factor = 0.65;
   else if (j.code === 'US-CA') factor = 0.60;
   else if (j.code === 'SG') factor = 0.55;
 
-  // Data breach gets boosted in GDPR jurisdictions
   if (category === 'data_breach' && (j.code === 'EU' || j.code === 'UK')) {
     factor += 0.15;
   }
@@ -424,12 +496,10 @@ function generateReasoning({
   parts.push(`Category: ${category.replace(/_/g, ' ').toUpperCase()}`);
   parts.push('');
 
-  // Evidence assessment
   parts.push(`EVIDENCE ASSESSMENT: The submitted evidence was evaluated with a strength score of ${(evidenceStrength * 100).toFixed(0)}%.`);
   parts.push(`The description states: "${description.substring(0, 200)}${description.length > 200 ? '...' : ''}"`);
   parts.push('');
 
-  // Precedent analysis
   if (topPrecedents.length > 0) {
     parts.push(`PRECEDENT ANALYSIS: ${topPrecedents.length} precedent case(s) were identified with an average alignment score of ${(precedentAlignment * 100).toFixed(0)}%:`);
     for (const p of topPrecedents.slice(0, 3)) {
@@ -441,18 +511,15 @@ function generateReasoning({
     parts.push('');
   }
 
-  // Jurisdiction rules
   parts.push(`GOVERNING LAW: ${jurisdiction.governing_law}. Maximum automated damages: $${jurisdiction.regulations.max_automated_damages_usdc.toFixed(2)} USDC.`);
   if (category === 'hallucination' && hallucinationClause?.enabled) {
     parts.push(`HALLUCINATION CLAUSE: Active. Max hallucination rate: ${(hallucinationClause.max_hallucination_rate * 100).toFixed(1)}%. Penalty per incident: $${hallucinationClause.penalty_per_incident_usdc.toFixed(2)} USDC.`);
   }
   parts.push('');
 
-  // Reputation context
   parts.push(`REPUTATION CONTEXT: Filer score: ${filerRep}/1000. Respondent score: ${respondentRep}/1000.`);
   parts.push('');
 
-  // Ruling
   parts.push(`RULING: ${favorFiler ? 'CLAIM UPHELD' : 'CLAIM DENIED'}. Liability score: ${(liabilityScore * 100).toFixed(0)}%.`);
   if (favorFiler) {
     parts.push(`DAMAGES AWARDED: $${damagesAwarded.toFixed(2)} USDC (claimed: $${claimedDamagesUsdc.toFixed(2)} USDC).`);

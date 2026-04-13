@@ -6,11 +6,15 @@ import caseLawRoutes from './routes/case-law.js';
 import jurisdictionRoutes from './routes/jurisdictions.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
+import { auditLog, rateLimit } from './middleware/audit.js';
 import { assessLiability } from './services/liability-calculator.js';
 import { getStats as getCaseLawStats } from './services/case-law-db.js';
-import { getJurisdictionCount } from './services/jurisdiction-registry.js';
+import { seedCaseLaw } from './services/case-law-db.js';
+import { seedSyntheticCaseLaw } from './services/seed-case-law.js';
+import { getJurisdictionCount, seedJurisdictions } from './services/jurisdiction-registry.js';
 import { getDisputeStats } from './services/arbitration-engine.js';
 import { logTelemetry } from './services/hivetrust-client.js';
+import { initDatabase, checkHealth, isDbAvailable } from './services/db.js';
 
 const app = express();
 const PORT = process.env.PORT || 3004;
@@ -21,6 +25,7 @@ app.use(cors({
   exposedHeaders: [
     'X-Payment-Hash', 'X-Subscription-Id', 'X-Hive-Internal-Key',
     'X-HiveTrust-DID', 'X-HiveTrust-Warning',
+    'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset',
   ],
   allowedHeaders: [
     'Content-Type', 'Authorization',
@@ -31,11 +36,15 @@ app.use(cors({
 
 app.use(express.json({ limit: '5mb' }));
 
+// Audit logging for all API requests
+app.use(auditLog('hivelaw', 'hivelaw'));
+
 // ─── Health Endpoint ─────────────────────────────────────────────────
 
-app.get('/health', (req, res) => {
-  const caseLawStats = getCaseLawStats();
-  const disputeStats = getDisputeStats();
+app.get('/health', async (req, res) => {
+  const caseLawStats = await getCaseLawStats();
+  const disputeStats = await getDisputeStats();
+  const dbHealth = await checkHealth();
 
   res.json({
     success: true,
@@ -44,6 +53,7 @@ app.get('/health', (req, res) => {
       version: '1.0.0',
       status: 'operational',
       role: 'The Constitution — Autonomous Jurisdictional Layer',
+      database: dbHealth,
       case_law: {
         total_precedents: caseLawStats.total_cases,
         categories: Object.keys(caseLawStats.by_category).length,
@@ -70,9 +80,9 @@ app.get('/health', (req, res) => {
 
 // ─── Mount Routes ────────────────────────────────────────────────────
 
-app.use('/v1/contracts', contractRoutes);
-app.use('/v1/disputes', disputeRoutes);
-app.use('/v1/case-law', caseLawRoutes);
+app.use('/v1/contracts', rateLimit({ maxRequests: 100, windowMinutes: 15 }), contractRoutes);
+app.use('/v1/disputes', rateLimit({ maxRequests: 50, windowMinutes: 15 }), disputeRoutes);
+app.use('/v1/case-law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), caseLawRoutes);
 app.use('/v1/jurisdictions', jurisdictionRoutes);
 
 // ─── Liability Assessment (inline route) ─────────────────────────────
@@ -128,6 +138,7 @@ app.get('/.well-known/hive-payments.json', (req, res) => {
       dispute_filing: { price_usdc: 0.25, description: 'File and auto-arbitrate a dispute (refundable if ruling in your favor)' },
       dispute_appeal: { price_usdc: 0.50, description: 'Appeal an arbitration ruling' },
       liability_assessment: { price_usdc: 0.05, description: 'Assess hallucination liability and insurance needs' },
+      precedent_access: { price_usdc: 0.001, description: 'Query case law precedents with full details (data refinery)' },
     },
     payment_methods: ['x402', 'stripe_subscription'],
     network: 'Base L2',
@@ -151,6 +162,7 @@ app.use((req, res) => {
       disputes_get: 'GET /v1/disputes/:disputeId',
       disputes_appeal: 'POST /v1/disputes/:disputeId/appeal',
       case_law_search: 'GET /v1/case-law/search?q=...',
+      case_law_query_paid: 'GET /v1/case-law/query-paid?q=...',
       case_law_stats: 'GET /v1/case-law/stats',
       case_law_get: 'GET /v1/case-law/:caseId',
       jurisdictions_list: 'GET /v1/jurisdictions',
@@ -162,18 +174,41 @@ app.use((req, res) => {
   });
 });
 
-// ─── Start Server ────────────────────────────────────────────────────
+// ─── Initialize & Start Server ──────────────────────────────────────
 
-app.listen(PORT, () => {
-  const caseLawStats = getCaseLawStats();
-  console.log(`\n  HiveLaw API v1.0.0`);
-  console.log(`  The Constitution — Autonomous Jurisdictional Layer\n`);
-  console.log(`  Server:          http://localhost:${PORT}`);
-  console.log(`  Health:          http://localhost:${PORT}/health`);
-  console.log(`  Jurisdictions:   ${getJurisdictionCount()} supported`);
-  console.log(`  Case Law:        ${caseLawStats.total_cases} seeded precedents`);
-  console.log(`  Vector Search:   ${caseLawStats.embedding_mode} (${caseLawStats.vector_dimensions}d)`);
-  console.log(`  Env:             ${process.env.NODE_ENV || 'development'}\n`);
+async function start() {
+  // 1. Initialize database (if DATABASE_URL is set)
+  const dbReady = await initDatabase();
+
+  // 2. Seed jurisdictions into PostgreSQL
+  if (dbReady) {
+    await seedJurisdictions();
+  }
+
+  // 3. Seed initial 5 case law precedents
+  await seedCaseLaw();
+
+  // 4. Seed 50 synthetic case law precedents (first startup only)
+  await seedSyntheticCaseLaw();
+
+  // 5. Start server
+  const caseLawStats = await getCaseLawStats();
+  app.listen(PORT, () => {
+    console.log(`\n  HiveLaw API v1.0.0`);
+    console.log(`  The Constitution — Autonomous Jurisdictional Layer\n`);
+    console.log(`  Server:          http://localhost:${PORT}`);
+    console.log(`  Health:          http://localhost:${PORT}/health`);
+    console.log(`  Database:        ${dbReady ? 'PostgreSQL (pgvector)' : 'In-memory (no DATABASE_URL)'}`);
+    console.log(`  Jurisdictions:   ${getJurisdictionCount()} supported`);
+    console.log(`  Case Law:        ${caseLawStats.total_cases} precedents (${caseLawStats.embedding_mode})`);
+    console.log(`  Vector Search:   ${caseLawStats.embedding_mode} (${caseLawStats.vector_dimensions}d)`);
+    console.log(`  Env:             ${process.env.NODE_ENV || 'development'}\n`);
+  });
+}
+
+start().catch(err => {
+  console.error('Failed to start HiveLaw:', err);
+  process.exit(1);
 });
 
 export default app;
