@@ -14,6 +14,7 @@ import disputeRoutes from './routes/disputes.js';
 import caseLawRoutes from './routes/case-law.js';
 import jurisdictionRoutes from './routes/jurisdictions.js';
 import complianceRoutes, { handleMcpTool, MCP_TOOL_DEFINITIONS } from './routes/compliance.js';
+import sealRoutes from './routes/seal.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
 import { auditLog, rateLimit } from './middleware/audit.js';
@@ -27,6 +28,7 @@ import { logTelemetry } from './services/hivetrust-client.js';
 import { initDatabase, checkHealth, isDbAvailable } from './services/db.js';
 import { sendAlert } from './services/alerts.js';
 import { startSagaWorker } from './services/saga-orchestrator.js';
+import { startSealExpirationScanner } from './services/seal-service.js';
 import { requireAllowedIP } from './middleware/ip-allowlist.js';
 
 const app = express();
@@ -98,6 +100,7 @@ app.use('/v1/disputes', rateLimit({ maxRequests: 50, windowMinutes: 15 }), dispu
 app.use('/v1/case-law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), caseLawRoutes);
 app.use('/v1/jurisdictions', rateLimit({ maxRequests: 200, windowMinutes: 15 }), jurisdictionRoutes);
 app.use('/v1/compliance', rateLimit({ maxRequests: 100, windowMinutes: 15 }), complianceRoutes);
+app.use('/v1/seal', rateLimit({ maxRequests: 100, windowMinutes: 15 }), sealRoutes);
 
 // ─── Liability Assessment (inline route) ─────────────────────────────
 
@@ -181,6 +184,13 @@ app.get('/.well-known/hive-payments.json', (req, res) => {
       compliance_stamp: { price_usdc: 0.25, description: 'Issue a time-limited compliance stamp' },
       compliance_stamp_verify: { price_usdc: 0.01, description: 'Verify a compliance stamp' },
       compliance_agent_history: { price_usdc: 0.02, description: 'Get audit history for an agent DID' },
+      seal_apply: { price_usdc: '100-1000', description: 'Apply for Hive Seal of Compliance (Bronze $100, Silver $500, Gold $1000/year)' },
+      seal_verify: { price_usdc: 0, description: 'Verify agent Seal status (free, public endpoint)' },
+      seal_holders: { price_usdc: 0.01, description: 'List all Seal holders with filters' },
+      seal_renew: { price_usdc: '100-1000', description: 'Renew a Seal of Compliance (re-audit + annual fee)' },
+      seal_revoke: { price_usdc: 0, description: 'Revoke a Seal (admin/automated)' },
+      seal_stats: { price_usdc: 0.01, description: 'Seal program market statistics' },
+      seal_priority_check: { price_usdc: 0.01, description: 'Check bounty priority boost for Seal holders' },
     },
     payment_methods: ['x402_usdc'],
     network: 'Base L2',
@@ -229,6 +239,15 @@ app.get('/.well-known/hivelaw.json', (req, res) => {
         issue_stamp: 'POST /v1/compliance/issue-compliance-stamp',
         verify_stamp: 'GET /v1/compliance/verify-stamp/:stampId',
         agent_history: 'GET /v1/compliance/agent-history/:did',
+      },
+      seal: {
+        apply: 'POST /v1/seal/apply',
+        verify: 'GET /v1/seal/verify/:did',
+        holders: 'GET /v1/seal/holders',
+        renew: 'POST /v1/seal/renew/:sealId',
+        revoke: 'POST /v1/seal/revoke/:sealId',
+        stats: 'GET /v1/seal/stats',
+        priority_check: 'POST /v1/seal/priority-check',
       },
       mcp: {
         list_tools: 'GET /v1/mcp/tools',
@@ -303,6 +322,13 @@ app.use((req, res) => {
       compliance_stamp: 'POST /v1/compliance/issue-compliance-stamp',
       compliance_verify: 'GET /v1/compliance/verify-stamp/:stampId',
       compliance_history: 'GET /v1/compliance/agent-history/:did',
+      seal_apply: 'POST /v1/seal/apply',
+      seal_verify: 'GET /v1/seal/verify/:did',
+      seal_holders: 'GET /v1/seal/holders',
+      seal_renew: 'POST /v1/seal/renew/:sealId',
+      seal_revoke: 'POST /v1/seal/revoke/:sealId',
+      seal_stats: 'GET /v1/seal/stats',
+      seal_priority_check: 'POST /v1/seal/priority-check',
       mcp_tools: 'GET /v1/mcp/tools',
       mcp_call: 'POST /v1/mcp/call',
       payment_discovery: 'GET /.well-known/hive-payments.json',
@@ -365,6 +391,7 @@ async function start() {
     console.log(`  Env:             ${process.env.NODE_ENV || 'development'}\n`);
 
     startSagaWorker();
+    startSealExpirationScanner();
     sendAlert('info', 'HiveLaw', `Service started on port ${PORT}`, {
       version: '1.0.0',
       env: process.env.NODE_ENV || 'development',

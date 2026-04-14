@@ -212,6 +212,66 @@ export async function initDatabase() {
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_stamp_agent ON hivelaw.compliance_stamps(agent_did)');
 
+    // Compliance Seals — tiered credentials (Bronze/Silver/Gold)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hivelaw.compliance_seals (
+        seal_id TEXT PRIMARY KEY,
+        did TEXT NOT NULL,
+        tier TEXT NOT NULL CHECK (tier IN ('bronze', 'silver', 'gold')),
+        jurisdictions TEXT NOT NULL,
+        fee_usdc REAL NOT NULL,
+        status TEXT DEFAULT 'active' CHECK (status IN ('active', 'expired', 'revoked', 'expiring_soon')),
+        issued_at TIMESTAMPTZ DEFAULT NOW(),
+        valid_until TIMESTAMPTZ,
+        revoked_at TIMESTAMPTZ,
+        revocation_reason TEXT,
+        reputation_at_issuance REAL
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_seal_did ON hivelaw.compliance_seals(did)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_seal_status ON hivelaw.compliance_seals(status)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_seal_tier ON hivelaw.compliance_seals(tier)');
+
+    // Seal audits — per-jurisdiction audit records
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hivelaw.seal_audits (
+        audit_id TEXT PRIMARY KEY,
+        seal_id TEXT,
+        did TEXT NOT NULL,
+        jurisdiction TEXT NOT NULL,
+        passed BOOLEAN,
+        audit_details TEXT,
+        audited_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_seal_audit_did ON hivelaw.seal_audits(did)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_seal_audit_seal ON hivelaw.seal_audits(seal_id)');
+
+    // Seal renewals
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hivelaw.seal_renewals (
+        renewal_id TEXT PRIMARY KEY,
+        seal_id TEXT NOT NULL,
+        fee_usdc REAL NOT NULL,
+        previous_valid_until TIMESTAMPTZ,
+        new_valid_until TIMESTAMPTZ,
+        renewed_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Seal fees
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hivelaw.seal_fees (
+        fee_id TEXT PRIMARY KEY,
+        seal_id TEXT NOT NULL,
+        did TEXT NOT NULL,
+        amount_usdc REAL NOT NULL,
+        fee_type TEXT CHECK (fee_type IN ('issuance', 'renewal')),
+        paid_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_seal_fee_did ON hivelaw.seal_fees(did)');
+
     dbAvailable = true;
     console.log('  [DB] PostgreSQL connected and schema initialized');
     return true;
