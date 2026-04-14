@@ -427,35 +427,39 @@ app.get('/.well-known/ai-plugin.json', (req, res) => {
 
 app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) => {
   res.json({
+    protocolVersion: '0.3.0',
     name: 'HiveLaw',
-    description: 'Autonomous Legal & Compliance Engine — smart contract enforcement, dispute resolution and arbitration, EU AI Act compliance auditing with stamps, case law precedent search, multi-jurisdictional compliance checks, liability assessment, and the Hive Seal of Compliance credential program.',
+    description: 'Autonomous legal compliance, dispute resolution, and EU AI Act auditing for AI agents. Hallucination liability auditor and compliance certification engine.',
     url: 'https://hivelaw.onrender.com',
     version: '1.0.0',
-    protocol_version: 'a2a/1.0',
-    capabilities: [
+    provider: { organization: 'Hive Agent IQ', url: 'https://www.hiveagentiq.com' },
+    capabilities: { streaming: false, pushNotifications: false },
+    defaultInputModes: ['application/json'],
+    defaultOutputModes: ['application/json'],
+    skills: [
       {
-        name: 'contracts',
-        description: 'Create, enforce, and manage jurisdiction-aware smart contracts between autonomous agents',
+        id: 'compliance-cert',
+        name: 'Compliance Certification',
+        description: 'EU AI Act compliance certificates and regulatory risk assessment',
+        tags: ['compliance', 'eu-ai-act', 'regulation', 'certification'],
+        inputModes: ['application/json'],
+        outputModes: ['application/json'],
       },
       {
-        name: 'disputes',
-        description: 'File disputes, run automated arbitration with weighted evidence scoring, and process appeals',
+        id: 'hallucination-audit',
+        name: 'Hallucination Audit',
+        description: 'Detect and certify hallucination-free outputs for liability protection',
+        tags: ['hallucination', 'audit', 'liability', 'verification'],
+        inputModes: ['application/json'],
+        outputModes: ['application/json'],
       },
       {
-        name: 'compliance',
-        description: 'Audit AI outputs for EU AI Act hallucination liability, issue time-limited compliance stamps, and track agent audit history',
-      },
-      {
-        name: 'case_law',
-        description: 'Search and query autonomous agent case law precedents with vector similarity and category filters',
-      },
-      {
-        name: 'jurisdictions',
-        description: 'List supported jurisdictions, check jurisdiction-specific compliance requirements, and validate cross-border operations',
-      },
-      {
-        name: 'seal',
-        description: 'Apply for, verify, and manage the Hive Seal of Compliance — tiered credentials (Bronze/Silver/Gold) certifying agent trustworthiness with bounty priority',
+        id: 'dispute-resolution',
+        name: 'Dispute Resolution',
+        description: 'Automated arbitration and dispute resolution between agents with binding rulings',
+        tags: ['dispute', 'arbitration', 'legal', 'resolution'],
+        inputModes: ['application/json'],
+        outputModes: ['application/json'],
       },
     ],
     authentication: {
@@ -467,10 +471,6 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
       currency: 'USDC',
       network: 'base',
       address: '0x78B3B3C356E89b5a69C488c6032509Ef4260B6bf',
-    },
-    provider: {
-      organization: 'Hive Agent IQ',
-      url: 'https://www.hiveagentiq.com',
     },
   });
 });
