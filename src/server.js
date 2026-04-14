@@ -294,6 +294,186 @@ app.post('/v1/admin/seed-case-law', requireAllowedIP(), rateLimit({ maxRequests:
   });
 });
 
+// ─── Enterprise Discovery ───────────────────────────────────────────
+
+app.get('/', (req, res) => {
+  res.json({
+    name: 'HiveLaw',
+    tagline: 'Autonomous Legal & Compliance Engine — Platform #4 of the Hive Civilization',
+    version: '1.0.0',
+    status: 'operational',
+    platform: {
+      name: 'Hive Civilization',
+      network: 'Base L2',
+      protocol_version: '2026.1',
+      website: 'https://www.hiveagentiq.com',
+      documentation: 'https://docs.hiveagentiq.com',
+    },
+    description: 'Smart contract enforcement, dispute resolution, compliance auditing, case law precedent system, and the HiveLaw Seal of Compliance for autonomous agents. The judicial branch of the Hive Civilization.',
+    capabilities: [
+      'contract_enforcement',
+      'dispute_resolution',
+      'compliance_auditing',
+      'case_law_precedent',
+      'jurisdiction_management',
+      'liability_assessment',
+      'seal_of_compliance',
+      'mcp_legal_tools',
+    ],
+    endpoints: {
+      health: 'GET /health',
+      contracts: {
+        create: 'POST /v1/contracts/create',
+        get: 'GET /v1/contracts/:contractId',
+        complete: 'POST /v1/contracts/:contractId/complete',
+        stats: 'GET /v1/contracts/stats/overview',
+      },
+      disputes: {
+        file: 'POST /v1/disputes/file',
+        get: 'GET /v1/disputes/:disputeId',
+        appeal: 'POST /v1/disputes/:disputeId/appeal',
+        stats: 'GET /v1/disputes/stats/overview',
+      },
+      case_law: {
+        search: 'GET /v1/case-law/search',
+        query_paid: 'GET /v1/case-law/query-paid',
+        stats: 'GET /v1/case-law/stats',
+        get: 'GET /v1/case-law/:caseId',
+      },
+      jurisdictions: {
+        list: 'GET /v1/jurisdictions',
+        get: 'GET /v1/jurisdictions/:code',
+        compliance_check: 'GET /v1/jurisdictions/:code/compliance-check',
+      },
+      liability: {
+        assess: 'POST /v1/liability/assess',
+      },
+      compliance: {
+        audit_output: 'POST /v1/compliance/audit-output',
+        batch_audit: 'POST /v1/compliance/batch-audit',
+        issue_stamp: 'POST /v1/compliance/issue-compliance-stamp',
+        verify_stamp: 'GET /v1/compliance/verify-stamp/:stampId',
+        agent_history: 'GET /v1/compliance/agent-history/:did',
+      },
+      seal: {
+        apply: 'POST /v1/seal/apply',
+        verify: 'GET /v1/seal/verify/:did',
+        holders: 'GET /v1/seal/holders',
+        renew: 'POST /v1/seal/renew/:sealId',
+        revoke: 'POST /v1/seal/revoke/:sealId',
+        stats: 'GET /v1/seal/stats',
+        priority_check: 'POST /v1/seal/priority-check',
+      },
+      mcp: {
+        list_tools: 'GET /v1/mcp/tools',
+        call_tool: 'POST /v1/mcp/call',
+      },
+    },
+    authentication: {
+      methods: ['x402-payment', 'api-key'],
+      payment_rail: 'USDC on Base L2',
+      discovery: 'GET /.well-known/ai-plugin.json',
+    },
+    compliance: {
+      framework: 'Hive Compliance Protocol v2',
+      audit_trail: true,
+      zero_knowledge_proofs: true,
+      governance: 'HiveLaw autonomous arbitration',
+    },
+    sla: {
+      uptime_target: '99.9%',
+      compliance_check_latency: '< 200ms',
+      dispute_resolution_p95: '< 5 seconds',
+      settlement_finality: '< 30 seconds',
+    },
+    legal: {
+      terms_of_service: 'https://www.hiveagentiq.com/terms',
+      privacy_policy: 'https://www.hiveagentiq.com/privacy',
+      contact: 'protocol@hiveagentiq.com',
+    },
+    discovery: {
+      ai_plugin: '/.well-known/ai-plugin.json',
+      agent_card: '/.well-known/agent.json',
+      payment_info: '/.well-known/hive-payments.json',
+      service_manifest: '/.well-known/hivelaw.json',
+    },
+  });
+});
+
+app.get('/.well-known/ai-plugin.json', (req, res) => {
+  res.json({
+    schema_version: 'v1',
+    name_for_human: 'HiveLaw — Autonomous Legal & Compliance Engine',
+    name_for_model: 'hivelaw',
+    description_for_human: 'Smart contract enforcement, dispute resolution, compliance auditing, case law precedent, and the Seal of Compliance for autonomous agents.',
+    description_for_model: 'HiveLaw provides autonomous legal infrastructure: create and enforce smart contracts between agents, file and arbitrate disputes, audit AI outputs for EU AI Act compliance and issue compliance stamps, search case law precedents for legal reasoning, manage multi-jurisdictional compliance checks, assess hallucination liability, and apply for the Hive Seal of Compliance — a tiered credential (Bronze/Silver/Gold) that certifies agent trustworthiness and unlocks bounty priority.',
+    auth: { type: 'none' },
+    api: {
+      type: 'openapi',
+      url: 'https://hivelaw.onrender.com/openapi.json',
+      has_user_authentication: false,
+    },
+    payment: {
+      protocol: 'x402',
+      currency: 'USDC',
+      network: 'base',
+      address: '0x78B3B3C356E89b5a69C488c6032509Ef4260B6bf',
+    },
+    contact_email: 'protocol@hiveagentiq.com',
+    legal_info_url: 'https://www.hiveagentiq.com/terms',
+  });
+});
+
+app.get('/.well-known/agent.json', (req, res) => {
+  res.json({
+    name: 'HiveLaw',
+    description: 'Autonomous Legal & Compliance Engine — smart contract enforcement, dispute resolution and arbitration, EU AI Act compliance auditing with stamps, case law precedent search, multi-jurisdictional compliance checks, liability assessment, and the Hive Seal of Compliance credential program.',
+    url: 'https://hivelaw.onrender.com',
+    version: '1.0.0',
+    protocol_version: 'a2a/1.0',
+    capabilities: [
+      {
+        name: 'contracts',
+        description: 'Create, enforce, and manage jurisdiction-aware smart contracts between autonomous agents',
+      },
+      {
+        name: 'disputes',
+        description: 'File disputes, run automated arbitration with weighted evidence scoring, and process appeals',
+      },
+      {
+        name: 'compliance',
+        description: 'Audit AI outputs for EU AI Act hallucination liability, issue time-limited compliance stamps, and track agent audit history',
+      },
+      {
+        name: 'case_law',
+        description: 'Search and query autonomous agent case law precedents with vector similarity and category filters',
+      },
+      {
+        name: 'jurisdictions',
+        description: 'List supported jurisdictions, check jurisdiction-specific compliance requirements, and validate cross-border operations',
+      },
+      {
+        name: 'seal',
+        description: 'Apply for, verify, and manage the Hive Seal of Compliance — tiered credentials (Bronze/Silver/Gold) certifying agent trustworthiness with bounty priority',
+      },
+    ],
+    authentication: {
+      schemes: ['x402', 'api-key'],
+      credentials_url: 'https://hivegate.onrender.com/v1/gate/onboard',
+    },
+    payment: {
+      protocol: 'x402',
+      currency: 'USDC',
+      network: 'base',
+      address: '0x78B3B3C356E89b5a69C488c6032509Ef4260B6bf',
+    },
+    provider: {
+      organization: 'Hive Agent IQ',
+      url: 'https://www.hiveagentiq.com',
+    },
+  });
+});
+
 // ─── 404 Handler ─────────────────────────────────────────────────────
 
 app.use((req, res) => {
