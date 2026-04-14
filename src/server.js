@@ -433,7 +433,7 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
     url: 'https://hivelaw.onrender.com',
     version: '1.0.0',
     provider: { organization: 'Hive Agent IQ', url: 'https://www.hiveagentiq.com' },
-    capabilities: { streaming: false, pushNotifications: false },
+    capabilities: { streaming: false, pushNotifications: false, stateTransitionHistory: false },
     defaultInputModes: ['application/json'],
     defaultOutputModes: ['application/json'],
     skills: [
@@ -444,6 +444,7 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
         tags: ['compliance', 'eu-ai-act', 'regulation', 'certification'],
         inputModes: ['application/json'],
         outputModes: ['application/json'],
+        examples: [],
       },
       {
         id: 'hallucination-audit',
@@ -452,6 +453,7 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
         tags: ['hallucination', 'audit', 'liability', 'verification'],
         inputModes: ['application/json'],
         outputModes: ['application/json'],
+        examples: [],
       },
       {
         id: 'dispute-resolution',
@@ -460,6 +462,7 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
         tags: ['dispute', 'arbitration', 'legal', 'resolution'],
         inputModes: ['application/json'],
         outputModes: ['application/json'],
+        examples: [],
       },
     ],
     authentication: {
