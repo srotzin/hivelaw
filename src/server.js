@@ -393,7 +393,8 @@ app.get('/', (req, res) => {
     },
     discovery: {
       ai_plugin: '/.well-known/ai-plugin.json',
-      agent_card: '/.well-known/agent.json',
+      agent_card: '/.well-known/agent-card.json',
+      agent_card_legacy: '/.well-known/agent.json',
       payment_info: '/.well-known/hive-payments.json',
       service_manifest: '/.well-known/hivelaw.json',
     },
@@ -424,7 +425,7 @@ app.get('/.well-known/ai-plugin.json', (req, res) => {
   });
 });
 
-app.get('/.well-known/agent.json', (req, res) => {
+app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) => {
   res.json({
     name: 'HiveLaw',
     description: 'Autonomous Legal & Compliance Engine — smart contract enforcement, dispute resolution and arbitration, EU AI Act compliance auditing with stamps, case law precedent search, multi-jurisdictional compliance checks, liability assessment, and the Hive Seal of Compliance credential program.',
