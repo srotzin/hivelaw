@@ -144,7 +144,7 @@ async function verifyOnChainPayment(txHash, requiredAmountUsdc, { endpoint, did 
 export function requirePayment(priceUsdc, serviceName = 'Hive Service') {
   return async (req, res, next) => {
     // 1. Internal key bypass (platform-to-platform calls)
-    const internalKey = req.headers['x-hive-internal-key'] || req.headers['x-api-key'];
+    const internalKey = req.headers['x-hive-internal'] || req.headers['x-hive-internal-key'] || req.headers['x-api-key'];
     if (HIVELAW_SERVICE_KEY && internalKey === HIVELAW_SERVICE_KEY) {
       req.paymentVerified = true;
       req.paymentSource = 'internal';

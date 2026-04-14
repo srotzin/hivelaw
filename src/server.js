@@ -268,7 +268,7 @@ app.post('/v1/admin/seed-case-law', requireAllowedIP(), rateLimit({ maxRequests:
   if (!serviceKey) {
     return res.status(401).json({ success: false, error: 'No service key configured. Set HIVELAW_SERVICE_KEY.' });
   }
-  if (req.headers['x-hive-internal-key'] !== serviceKey) {
+  if ((req.headers['x-hive-internal'] || req.headers['x-hive-internal-key']) !== serviceKey) {
     return res.status(401).json({ success: false, error: 'Admin key required.' });
   }
 
