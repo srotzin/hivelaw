@@ -12,6 +12,11 @@ export function auditLog(fromPlatform, toPlatform) {
     res.end = function (...args) {
       const durationMs = Date.now() - start;
 
+      const endpoint = req.originalUrl || req.url;
+      const did = req.agentDid || null;
+      const statusCode = res.statusCode;
+      const success = statusCode < 400;
+
       if (isDbAvailable()) {
         pool.query(`
           INSERT INTO public.audit_log (from_platform, to_platform, endpoint, did, method, status_code, success, duration_ms)
@@ -19,13 +24,23 @@ export function auditLog(fromPlatform, toPlatform) {
         `, [
           fromPlatform,
           toPlatform,
-          req.originalUrl || req.url,
-          req.agentDid || null,
+          endpoint,
+          did,
           req.method,
-          res.statusCode,
-          res.statusCode < 400,
+          statusCode,
+          success,
           durationMs,
-        ]).catch(() => {});
+        ]).catch(() => {
+          // DB unavailable — fall through to console fallback below
+          if (!success || durationMs > 5000) {
+            console.warn(`[audit] DB write failed | ${req.method} ${endpoint} ${statusCode} ${durationMs}ms did=${did || 'anon'}`);
+          }
+        });
+      }
+
+      // Console fallback for errors and slow requests when DB is unavailable
+      if (!isDbAvailable() && (!success || durationMs > 5000)) {
+        console.warn(`[audit] ${req.method} ${endpoint} ${statusCode} ${durationMs}ms did=${did || 'anon'} success=${success}`);
       }
 
       originalEnd.apply(res, args);
@@ -47,8 +62,8 @@ export function rateLimit({ maxRequests = 100, windowMinutes = 15 } = {}) {
     const did = req.agentDid;
     if (!did) return next(); // No DID = no rate limit (auth middleware handles this)
 
-    // Dev mode: relaxed limits
-    if (process.env.NODE_ENV !== 'production' && did.startsWith('did:hive:test_agent_')) {
+    // Dev mode: relaxed limits — gated behind ALLOW_TEST_DIDS env var
+    if (process.env.ALLOW_TEST_DIDS === 'true' && did.startsWith('did:hive:test_agent_')) {
       return next();
     }
 

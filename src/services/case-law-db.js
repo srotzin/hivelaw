@@ -1,10 +1,11 @@
-import crypto from 'node:crypto';
 import { createCaseLaw } from '../models/schemas.js';
 import pool, { isDbAvailable } from './db.js';
+import { embed, hashEmbed, getEmbeddingMode } from './embedding.js';
 
 /**
  * Case Law Database — PostgreSQL + pgvector with in-memory fallback.
- * Uses hash-based pseudo-embedding approach for generating vectors.
+ * Uses OpenAI text-embedding-3-small when OPENAI_API_KEY is set,
+ * otherwise falls back to hash-based pseudo-embeddings.
  */
 
 const DIMENSIONS = 128;
@@ -15,24 +16,8 @@ const memCases = new Map();
 /** @type {Map<string, { vector: number[], metadata: object }>} */
 const memVectorIndex = new Map();
 
-// ─── Embedding ───────────────────────────────────────────────────────
-
-export function hashEmbed(text) {
-  const normalized = text.toLowerCase().trim();
-  const vec = new Float64Array(DIMENSIONS);
-  const rounds = Math.ceil(DIMENSIONS / 8);
-  for (let r = 0; r < rounds; r++) {
-    const hash = crypto.createHash('sha512').update(`${r}:${normalized}`).digest();
-    for (let i = 0; i < 8 && r * 8 + i < DIMENSIONS; i++) {
-      vec[r * 8 + i] = hash.readInt32BE(i * 8) / 2147483647;
-    }
-  }
-  let norm = 0;
-  for (let i = 0; i < vec.length; i++) norm += vec[i] * vec[i];
-  norm = Math.sqrt(norm);
-  if (norm > 0) for (let i = 0; i < vec.length; i++) vec[i] /= norm;
-  return Array.from(vec);
-}
+// Re-export hashEmbed for backward compatibility
+export { hashEmbed } from './embedding.js';
 
 function cosineSimilarity(a, b) {
   let dot = 0, nA = 0, nB = 0;
@@ -53,7 +38,7 @@ function vectorToString(vec) {
 // ─── Core Operations ─────────────────────────────────────────────────
 
 export async function addCase(caseData, source = 'organic') {
-  const embedding = hashEmbed(
+  const embedding = await embed(
     `${caseData.category} ${caseData.summary} ${caseData.ruling_summary} ${caseData.key_factors.join(' ')}`
   );
   caseData.semantic_embedding = embedding.slice(0, 5).concat([`...${DIMENSIONS} dimensions`]);
@@ -201,7 +186,7 @@ export async function getStats() {
         consumer_win_rate: total > 0 ? +((consumerWins / total) * 100).toFixed(1) : 0,
         avg_resolution_time_ms: 2100,
         vector_dimensions: DIMENSIONS,
-        embedding_mode: 'pgvector-hash-pseudo',
+        embedding_mode: `pgvector-${getEmbeddingMode()}`,
       };
     } catch (err) {
       console.error('[case-law-db] getStats failed:', err.message);
@@ -225,7 +210,7 @@ export async function getAllCases() {
 // ─── PostgreSQL + pgvector search ────────────────────────────────────
 
 async function pgSearchCaseLaw(queryText, { category, jurisdiction, topK, strictCategory }) {
-  const queryVec = hashEmbed(queryText);
+  const queryVec = await embed(queryText);
   const vecStr = vectorToString(queryVec);
 
   // Build weighted score query with boosts applied in SQL
@@ -266,8 +251,8 @@ async function pgSearchCaseLaw(queryText, { category, jurisdiction, topK, strict
 
 // ─── In-memory fallback search ───────────────────────────────────────
 
-function memSearchCaseLaw(queryText, { category, jurisdiction, topK }) {
-  const queryVec = hashEmbed(queryText);
+async function memSearchCaseLaw(queryText, { category, jurisdiction, topK }) {
+  const queryVec = await embed(queryText);
   const results = [];
   const now = Date.now();
 
@@ -301,8 +286,8 @@ function memSearchCaseLaw(queryText, { category, jurisdiction, topK }) {
   return results.slice(0, topK);
 }
 
-function memSearchBroad(queryText, { jurisdiction, topK }) {
-  const queryVec = hashEmbed(queryText);
+async function memSearchBroad(queryText, { jurisdiction, topK }) {
+  const queryVec = await embed(queryText);
   const results = [];
   const now = Date.now();
 
@@ -355,7 +340,7 @@ function memGetStats() {
     consumer_win_rate: total > 0 ? +((consumerWins / total) * 100).toFixed(1) : 0,
     avg_resolution_time_ms: 2100,
     vector_dimensions: DIMENSIONS,
-    embedding_mode: 'hash-pseudo',
+    embedding_mode: getEmbeddingMode(),
   };
 }
 

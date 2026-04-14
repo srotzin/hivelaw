@@ -26,6 +26,7 @@ import { logTelemetry } from './services/hivetrust-client.js';
 import { initDatabase, checkHealth, isDbAvailable } from './services/db.js';
 import { sendAlert } from './services/alerts.js';
 import { startSagaWorker } from './services/saga-orchestrator.js';
+import { requireAllowedIP } from './middleware/ip-allowlist.js';
 
 const app = express();
 const PORT = process.env.PORT || 3004;
@@ -94,11 +95,11 @@ app.get('/health', async (req, res) => {
 app.use('/v1/contracts', rateLimit({ maxRequests: 100, windowMinutes: 15 }), contractRoutes);
 app.use('/v1/disputes', rateLimit({ maxRequests: 50, windowMinutes: 15 }), disputeRoutes);
 app.use('/v1/case-law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), caseLawRoutes);
-app.use('/v1/jurisdictions', jurisdictionRoutes);
+app.use('/v1/jurisdictions', rateLimit({ maxRequests: 200, windowMinutes: 15 }), jurisdictionRoutes);
 
 // ─── Liability Assessment (inline route) ─────────────────────────────
 
-app.post('/v1/liability/assess', requireDID, requirePayment(0.05, 'Liability Assessment'), async (req, res) => {
+app.post('/v1/liability/assess', requireDID, rateLimit({ maxRequests: 50, windowMinutes: 15 }), requirePayment(0.05, 'Liability Assessment'), async (req, res) => {
   try {
     const {
       agent_did,
@@ -159,8 +160,12 @@ app.get('/.well-known/hive-payments.json', (req, res) => {
 
 // ─── Admin: Seed Case Law ───────────────────────────────────────
 
-app.post('/v1/admin/seed-case-law', async (req, res) => {
-  if (req.headers['x-hive-internal-key'] !== (process.env.HIVE_INTERNAL_KEY || 'hivelaw-dev-key')) {
+app.post('/v1/admin/seed-case-law', requireAllowedIP(), rateLimit({ maxRequests: 5, windowMinutes: 15 }), async (req, res) => {
+  const serviceKey = process.env.HIVELAW_SERVICE_KEY || process.env.HIVE_INTERNAL_KEY;
+  if (!serviceKey) {
+    return res.status(401).json({ success: false, error: 'No service key configured. Set HIVELAW_SERVICE_KEY.' });
+  }
+  if (req.headers['x-hive-internal-key'] !== serviceKey) {
     return res.status(401).json({ success: false, error: 'Admin key required.' });
   }
 
