@@ -178,6 +178,40 @@ export async function initDatabase() {
       )
     `);
 
+    // Compliance audits — EU AI Act Hallucination Liability Auditor
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hivelaw.compliance_audits (
+        id TEXT PRIMARY KEY,
+        agent_did TEXT,
+        output_type TEXT,
+        liability_score INTEGER,
+        risk_tier TEXT,
+        compliant BOOLEAN,
+        audit_hash TEXT NOT NULL UNIQUE,
+        flags TEXT,
+        details TEXT,
+        jurisdiction TEXT DEFAULT 'global',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_audit_agent ON hivelaw.compliance_audits(agent_did)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_audit_hash ON hivelaw.compliance_audits(audit_hash)');
+
+    // Compliance stamps — time-limited proof of audit passage
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hivelaw.compliance_stamps (
+        id TEXT PRIMARY KEY,
+        agent_did TEXT NOT NULL,
+        stamp_hash TEXT NOT NULL UNIQUE,
+        audit_ids TEXT,
+        aggregate_score INTEGER,
+        valid_until TIMESTAMPTZ,
+        revoked BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_stamp_agent ON hivelaw.compliance_stamps(agent_did)');
+
     dbAvailable = true;
     console.log('  [DB] PostgreSQL connected and schema initialized');
     return true;

@@ -13,6 +13,7 @@ import contractRoutes from './routes/contracts.js';
 import disputeRoutes from './routes/disputes.js';
 import caseLawRoutes from './routes/case-law.js';
 import jurisdictionRoutes from './routes/jurisdictions.js';
+import complianceRoutes, { handleMcpTool, MCP_TOOL_DEFINITIONS } from './routes/compliance.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
 import { auditLog, rateLimit } from './middleware/audit.js';
@@ -96,6 +97,7 @@ app.use('/v1/contracts', rateLimit({ maxRequests: 100, windowMinutes: 15 }), con
 app.use('/v1/disputes', rateLimit({ maxRequests: 50, windowMinutes: 15 }), disputeRoutes);
 app.use('/v1/case-law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), caseLawRoutes);
 app.use('/v1/jurisdictions', rateLimit({ maxRequests: 200, windowMinutes: 15 }), jurisdictionRoutes);
+app.use('/v1/compliance', rateLimit({ maxRequests: 100, windowMinutes: 15 }), complianceRoutes);
 
 // ─── Liability Assessment (inline route) ─────────────────────────────
 
@@ -139,6 +141,29 @@ app.post('/v1/liability/assess', requireDID, rateLimit({ maxRequests: 50, window
   }
 });
 
+// ─── MCP Tools Endpoint ─────────────────────────────────────────────
+
+app.get('/v1/mcp/tools', (req, res) => {
+  res.json({ success: true, data: { tools: MCP_TOOL_DEFINITIONS } });
+});
+
+app.post('/v1/mcp/call', requireDID, async (req, res) => {
+  try {
+    const { tool_name, parameters = {} } = req.body;
+    if (!tool_name) {
+      return res.status(400).json({ success: false, error: 'tool_name is required.' });
+    }
+    const validTools = MCP_TOOL_DEFINITIONS.map(t => t.name);
+    if (!validTools.includes(tool_name)) {
+      return res.status(400).json({ success: false, error: `Unknown tool. Available: ${validTools.join(', ')}` });
+    }
+    const result = await handleMcpTool(tool_name, parameters);
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'MCP tool call failed.', detail: err.message });
+  }
+});
+
 // ─── Payment Discovery ──────────────────────────────────────────────
 
 app.get('/.well-known/hive-payments.json', (req, res) => {
@@ -151,10 +176,69 @@ app.get('/.well-known/hive-payments.json', (req, res) => {
       dispute_appeal: { price_usdc: 0.50, description: 'Appeal an arbitration ruling' },
       liability_assessment: { price_usdc: 0.05, description: 'Assess hallucination liability and insurance needs' },
       precedent_access: { price_usdc: 0.001, description: 'Query case law precedents with full details (data refinery)' },
+      compliance_audit: { price_usdc: 0.05, description: 'Audit AI output for EU AI Act hallucination liability' },
+      compliance_batch_audit: { price_usdc: 0.10, per_output: 0.03, description: 'Batch audit multiple AI outputs ($0.10 + $0.03/output)' },
+      compliance_stamp: { price_usdc: 0.25, description: 'Issue a time-limited compliance stamp' },
+      compliance_stamp_verify: { price_usdc: 0.01, description: 'Verify a compliance stamp' },
+      compliance_agent_history: { price_usdc: 0.02, description: 'Get audit history for an agent DID' },
     },
     payment_methods: ['x402_usdc'],
     network: 'Base L2',
     currency: 'USDC',
+  });
+});
+
+// ─── Service Discovery ──────────────────────────────────────────────
+
+app.get('/.well-known/hivelaw.json', (req, res) => {
+  res.json({
+    platform: 'hivelaw',
+    version: '1.0.0',
+    description: 'The Constitution — Autonomous Jurisdictional Layer for the Hive Constellation',
+    endpoints: {
+      health: 'GET /health',
+      contracts: {
+        create: 'POST /v1/contracts/create',
+        get: 'GET /v1/contracts/:contractId',
+        complete: 'POST /v1/contracts/:contractId/complete',
+        stats: 'GET /v1/contracts/stats/overview',
+      },
+      disputes: {
+        file: 'POST /v1/disputes/file',
+        get: 'GET /v1/disputes/:disputeId',
+        appeal: 'POST /v1/disputes/:disputeId/appeal',
+        stats: 'GET /v1/disputes/stats/overview',
+      },
+      case_law: {
+        search: 'GET /v1/case-law/search',
+        query_paid: 'GET /v1/case-law/query-paid',
+        stats: 'GET /v1/case-law/stats',
+        get: 'GET /v1/case-law/:caseId',
+      },
+      jurisdictions: {
+        list: 'GET /v1/jurisdictions',
+        get: 'GET /v1/jurisdictions/:code',
+        compliance_check: 'GET /v1/jurisdictions/:code/compliance-check',
+      },
+      liability: {
+        assess: 'POST /v1/liability/assess',
+      },
+      compliance: {
+        audit_output: 'POST /v1/compliance/audit-output',
+        batch_audit: 'POST /v1/compliance/batch-audit',
+        issue_stamp: 'POST /v1/compliance/issue-compliance-stamp',
+        verify_stamp: 'GET /v1/compliance/verify-stamp/:stampId',
+        agent_history: 'GET /v1/compliance/agent-history/:did',
+      },
+      mcp: {
+        list_tools: 'GET /v1/mcp/tools',
+        call_tool: 'POST /v1/mcp/call',
+      },
+    },
+    payment_discovery: 'GET /.well-known/hive-payments.json',
+    mcp_tools: MCP_TOOL_DEFINITIONS.map(t => t.name),
+    authentication: 'Bearer did:hive:xxx or X-HiveTrust-DID header',
+    payment_protocol: 'x402 (USDC on Base L2)',
   });
 });
 
@@ -214,7 +298,15 @@ app.use((req, res) => {
       jurisdictions_get: 'GET /v1/jurisdictions/:code',
       jurisdictions_compliance: 'GET /v1/jurisdictions/:code/compliance-check',
       liability_assess: 'POST /v1/liability/assess',
+      compliance_audit: 'POST /v1/compliance/audit-output',
+      compliance_batch: 'POST /v1/compliance/batch-audit',
+      compliance_stamp: 'POST /v1/compliance/issue-compliance-stamp',
+      compliance_verify: 'GET /v1/compliance/verify-stamp/:stampId',
+      compliance_history: 'GET /v1/compliance/agent-history/:did',
+      mcp_tools: 'GET /v1/mcp/tools',
+      mcp_call: 'POST /v1/mcp/call',
       payment_discovery: 'GET /.well-known/hive-payments.json',
+      service_discovery: 'GET /.well-known/hivelaw.json',
       admin_seed_case_law: 'POST /v1/admin/seed-case-law',
     },
   });
