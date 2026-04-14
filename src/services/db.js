@@ -157,13 +157,13 @@ export async function initDatabase() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS public.spent_payments (
         tx_hash TEXT PRIMARY KEY,
-        amount_usdc NUMERIC(10, 4) NOT NULL,
-        verified_at TIMESTAMPTZ DEFAULT NOW(),
+        amount_usdc NUMERIC(12, 4),
         endpoint TEXT,
-        did TEXT
+        did TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_spent_payments_verified_at ON public.spent_payments(verified_at)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_spent_payments_created_at ON public.spent_payments(created_at)');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS public.sagas (

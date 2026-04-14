@@ -20,6 +20,49 @@ const BASE_RPC_URL = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
 // ─── Replay Protection ─────────────────────────────────────────────
 const spentTxHashes = new Set();
 
+/**
+ * Check if a tx hash has already been used for payment.
+ * Checks in-memory Set first (fast), then PostgreSQL (persistent).
+ */
+async function isPaymentSpent(txHash) {
+  if (spentTxHashes.has(txHash)) return true;
+
+  if (isDbAvailable()) {
+    try {
+      const { rows } = await pool.query(
+        'SELECT 1 FROM public.spent_payments WHERE tx_hash = $1', [txHash]
+      );
+      if (rows.length > 0) {
+        spentTxHashes.add(txHash); // warm the in-memory cache
+        return true;
+      }
+    } catch (err) {
+      console.error('[x402] Replay DB check failed, continuing with RPC:', err.message);
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Record a tx hash as spent in both in-memory Set and PostgreSQL.
+ * Awaits the DB write to close the race window between concurrent requests.
+ */
+async function recordSpentPayment(txHash, amountUsdc, endpoint, did) {
+  spentTxHashes.add(txHash);
+
+  if (isDbAvailable()) {
+    try {
+      await pool.query(
+        'INSERT INTO public.spent_payments (tx_hash, amount_usdc, endpoint, did) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+        [txHash, amountUsdc, endpoint || null, did || null]
+      );
+    } catch (err) {
+      console.error('[x402] Failed to record spent tx:', err.message);
+    }
+  }
+}
+
 // Base L2 constants
 const USDC_CONTRACT = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
@@ -40,24 +83,9 @@ async function verifyOnChainPayment(txHash, requiredAmountUsdc, { endpoint, did 
     return { valid: false, reason: 'payment_address_not_configured' };
   }
 
-  // ─── Replay check: in-memory Set first ────────────────────────────
-  if (spentTxHashes.has(txHash)) {
+  // ─── Replay check (in-memory + DB) ────────────────────────────────
+  if (await isPaymentSpent(txHash)) {
     return { valid: false, reason: 'tx_already_spent' };
-  }
-
-  // ─── Replay check: DB second ──────────────────────────────────────
-  if (isDbAvailable()) {
-    try {
-      const { rows } = await pool.query(
-        'SELECT 1 FROM public.spent_payments WHERE tx_hash = $1', [txHash]
-      );
-      if (rows.length > 0) {
-        spentTxHashes.add(txHash); // warm the in-memory cache
-        return { valid: false, reason: 'tx_already_spent' };
-      }
-    } catch (err) {
-      console.error('[x402] Replay DB check failed, continuing with RPC:', err.message);
-    }
   }
 
   try {
@@ -89,14 +117,8 @@ async function verifyOnChainPayment(txHash, requiredAmountUsdc, { endpoint, did 
       const amountUsdc = amountRaw / 1_000_000;
 
       if (amountUsdc >= requiredAmountUsdc) {
-        // ─── Record spent tx hash ─────────────────────────────────
-        spentTxHashes.add(txHash);
-        if (isDbAvailable()) {
-          pool.query(
-            'INSERT INTO public.spent_payments (tx_hash, amount_usdc, endpoint, did) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
-            [txHash, amountUsdc, endpoint || null, did || null]
-          ).catch(err => console.error('[x402] Failed to record spent tx:', err.message));
-        }
+        // ─── Record spent tx hash (awaited to close race window) ──
+        await recordSpentPayment(txHash, amountUsdc, endpoint, did);
 
         return {
           valid: true,
@@ -132,6 +154,16 @@ export function requirePayment(priceUsdc, serviceName = 'Hive Service') {
     // 2. On-chain USDC verification (direct tx hash)
     const paymentHash = req.headers['x-payment-hash'] || req.headers['x-402-tx'] || req.headers['x-payment-tx'];
     if (paymentHash) {
+      // Replay check BEFORE hitting RPC — return 409 Conflict if already spent
+      if (await isPaymentSpent(paymentHash)) {
+        return res.status(409).json({
+          status: '409 Conflict',
+          error: 'Payment transaction already used',
+          reason: 'tx_already_spent',
+          service: serviceName,
+        });
+      }
+
       const result = await verifyOnChainPayment(paymentHash, priceUsdc, {
         endpoint: req.originalUrl || req.url,
         did: req.agentDid || null,
