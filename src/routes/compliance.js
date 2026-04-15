@@ -25,7 +25,7 @@ const router = Router();
 
 // ─── POST /audit-output ─────────────────────────────────────────────
 
-router.post('/audit-output', requireDID, requirePayment(0.05, 'Compliance Audit'), async (req, res) => {
+router.post('/audit-output', requireDID, requirePayment(0.10, 'Compliance Audit'), async (req, res) => {
   try {
     const {
       agent_did,
@@ -146,7 +146,7 @@ router.post('/batch-audit', requireDID, requirePayment(0.10, 'Batch Compliance A
 
 // ─── POST /issue-compliance-stamp ───────────────────────────────────
 
-router.post('/issue-compliance-stamp', requireDID, requirePayment(0.25, 'Compliance Stamp'), async (req, res) => {
+router.post('/issue-compliance-stamp', requireDID, requirePayment(0.50, 'Compliance Stamp'), async (req, res) => {
   try {
     const {
       agent_did,

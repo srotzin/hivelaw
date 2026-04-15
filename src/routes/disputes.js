@@ -11,7 +11,7 @@ const router = Router();
  * POST /v1/disputes/file — File a dispute and auto-arbitrate.
  * The ENTIRE arbitration happens in one request — sub-3-second resolution.
  */
-router.post('/file', requireDID, requirePayment(0.25, 'Dispute Filing'), async (req, res) => {
+router.post('/file', requireDID, requirePayment(0.50, 'Dispute Filing'), async (req, res) => {
   try {
     const {
       contract_id,

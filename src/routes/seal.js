@@ -30,7 +30,7 @@ const router = Router();
 
 // ─── POST /apply ─────────────────────────────────────────────────────
 
-router.post('/apply', requireDID, requirePayment(100, 'Seal of Compliance Application'), async (req, res) => {
+router.post('/apply', requireDID, requirePayment(999, 'Seal of Compliance Application'), async (req, res) => {
   try {
     const { did, tier, jurisdictions } = req.body;
 

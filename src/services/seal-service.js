@@ -1,14 +1,19 @@
 /**
  * Hive Seal of Compliance — Service Layer
  *
- * Tiered compliance credentials (Bronze/Silver/Gold) that agents earn
- * by passing HiveLaw audits across jurisdictions. Seal holders get
- * bounty priority. Annual renewal fees create recurring revenue.
+ * Tiered compliance credentials that agents earn by passing HiveLaw
+ * audits across jurisdictions. Seal holders get bounty priority.
+ * Annual renewal fees create recurring revenue.
+ *
+ * PRICING UPDATED April 2026 — 7/7 LLM consensus:
+ * SOC 2 audits cost $30K-$100K. HIPAA assessments $15K-$40K.
+ * Vanta charges $10K-$12K/yr. Even at $4,999 we deliver 90%+ savings.
  *
  * Tiers:
- *   Bronze (Local):    1 jurisdiction,   $100/yr, min reputation 100
- *   Silver (Regional): 3+ jurisdictions, $500/yr, min reputation 300
- *   Gold (Global):     10+ jurisdictions, $1,000/yr, min reputation 500
+ *   Bronze (SMB):        1 jurisdiction,    $999/yr,  min reputation 100
+ *   Silver (Mid-Market):  3+ jurisdictions,  $4,999/yr, min reputation 300
+ *   Gold (Enterprise):    10+ jurisdictions, $19,900/yr, min reputation 500
+ *   Platinum (Critical):  ALL jurisdictions, $49,900/yr, min reputation 700
  */
 
 import pool, { isDbAvailable } from './db.js';
@@ -29,25 +34,32 @@ const memSealFees = new Map();
 
 const TIER_CONFIG = {
   bronze: {
-    label: 'Bronze (Local)',
+    label: 'Bronze (SMB Compliance)',
     min_jurisdictions: 1,
-    fee_usdc: 100,
+    fee_usdc: 999,
     min_reputation: 100,
     priority_boost: 1.2,
   },
   silver: {
-    label: 'Silver (Regional)',
+    label: 'Silver (Mid-Market)',
     min_jurisdictions: 3,
-    fee_usdc: 500,
+    fee_usdc: 4999,
     min_reputation: 300,
     priority_boost: 1.5,
   },
   gold: {
-    label: 'Gold (Global)',
+    label: 'Gold (Enterprise)',
     min_jurisdictions: 10,
-    fee_usdc: 1000,
+    fee_usdc: 19900,
     min_reputation: 500,
     priority_boost: 2.0,
+  },
+  platinum: {
+    label: 'Platinum (Critical Infrastructure)',
+    min_jurisdictions: 13,
+    fee_usdc: 49900,
+    min_reputation: 700,
+    priority_boost: 3.0,
   },
 };
 

@@ -10,7 +10,7 @@ const router = Router();
 /**
  * POST /v1/contracts/create — Create a jurisdiction-aware smart contract.
  */
-router.post('/create', requireDID, requirePayment(0.05, 'Contract Creation'), async (req, res) => {
+router.post('/create', requireDID, requirePayment(0.10, 'Contract Creation'), async (req, res) => {
   try {
     const {
       type = 'service_agreement',
