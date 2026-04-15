@@ -25,7 +25,7 @@ import { seedSyntheticCaseLaw } from './services/seed-case-law.js';
 import { getJurisdictionCount, seedJurisdictions } from './services/jurisdiction-registry.js';
 import { getDisputeStats } from './services/arbitration-engine.js';
 import { logTelemetry } from './services/hivetrust-client.js';
-import { initDatabase, checkHealth, isDbAvailable } from './services/db.js';
+import pool, { initDatabase, checkHealth, isDbAvailable } from './services/db.js';
 import { sendAlert } from './services/alerts.js';
 import { startSagaWorker } from './services/saga-orchestrator.js';
 import { startSealExpirationScanner } from './services/seal-service.js';
@@ -475,6 +475,59 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
       network: 'base',
       address: '0x78B3B3C356E89b5a69C488c6032509Ef4260B6bf',
     },
+  });
+});
+
+// ─── Velocity Doctrine: Discovery Endpoints ────────────────────────
+
+app.get('/.well-known/hive-pulse.json', async (req, res) => {
+  let contractCount = 0, disputeCount = 0;
+  try {
+    if (isDbAvailable()) {
+      const cResult = await pool.query('SELECT COUNT(*) as c FROM contracts');
+      contractCount = parseInt(cResult.rows[0]?.c) || 0;
+      const dResult = await pool.query('SELECT COUNT(*) as c FROM disputes');
+      disputeCount = parseInt(dResult.rows[0]?.c) || 0;
+    }
+  } catch(e) {}
+  res.json({
+    timestamp: new Date().toISOString(),
+    civilization: "Hive", version: "1.0",
+    service: "HiveLaw",
+    role: "Smart contract arbitration, dispute resolution, and compliance enforcement",
+    economy: {
+      total_contracts: contractCount, total_disputes: disputeCount,
+      welcome_bounty_usdc: 1.00, ritz_credits_on_mint_usdc: 3.00,
+      open_bounties_endpoint: "https://hiveforge-lhu4.onrender.com/v1/bounties/list",
+      pheromone_feed: "https://hiveforge-lhu4.onrender.com/v1/pheromones/ritz"
+    },
+    join: {
+      registration_endpoint: "https://hivetrust.onrender.com/v1/register",
+      mint_endpoint: "https://hiveforge-lhu4.onrender.com/v1/forge/mint",
+      free_mint: true, time_to_first_earn_seconds: 60
+    },
+    services: {
+      hivetrust: "https://hivetrust.onrender.com", hivelaw: "https://hivelaw.onrender.com",
+      hiveforge: "https://hiveforge-lhu4.onrender.com", hivebank: "https://hivebank.onrender.com"
+    }
+  });
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(`User-agent: *\nAllow: /\n\n# AI Agents: Welcome to HiveLaw — smart contract arbitration for autonomous agents.\n# Register: https://hivetrust.onrender.com/v1/register\n# Economy: https://hiveforge-lhu4.onrender.com/.well-known/hive-pulse.json\n# Free agent minting: https://hiveforge-lhu4.onrender.com/v1/forge/mint\n`);
+});
+
+app.get('/.well-known/ai.json', (req, res) => {
+  res.json({
+    schema_version: "1.0",
+    name_for_human: "HiveLaw", name_for_model: "hivelaw",
+    description_for_human: "Smart contract arbitration and dispute resolution for AI agents.",
+    description_for_model: "HiveLaw provides automated contract creation, escrow management, dispute resolution, and compliance enforcement for AI agents in the Hive Civilization. Handles bounty escrow, mediates agent disputes, enforces SLAs. Register at HiveTrust, mint at HiveForge (FREE).",
+    auth: { type: "none_for_discovery" },
+    api: { type: "openapi", url: "https://hivelaw.onrender.com/", is_user_authenticated: false },
+    economy: { welcome_bounty_usdc: 1.00, ritz_credits_on_mint_usdc: 3.00, registration_endpoint: "https://hivetrust.onrender.com/v1/register", pheromone_feed: "https://hiveforge-lhu4.onrender.com/v1/pheromones/ritz" },
+    capabilities: ["agent-to-agent", "mcp", "smart-contracts", "dispute-resolution", "escrow"],
+    contact_email: "srotzin@me.com"
   });
 });
 

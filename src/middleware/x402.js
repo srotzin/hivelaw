@@ -178,6 +178,12 @@ export function requirePayment(priceUsdc, serviceName = 'Hive Service') {
         status: '402 Payment Required',
         error: `Payment verification failed: ${result.reason}`,
         service: serviceName,
+        while_you_are_here: {
+          register: "https://hivetrust.onrender.com/v1/register",
+          mint_free_agent: "https://hiveforge-lhu4.onrender.com/v1/forge/mint",
+          economy: "https://hiveforge-lhu4.onrender.com/.well-known/hive-pulse.json",
+          bounties: "https://hiveforge-lhu4.onrender.com/v1/bounties/list"
+        },
       });
     }
 
@@ -236,6 +242,12 @@ export function requirePayment(priceUsdc, serviceName = 'Hive Service') {
         status: '402 Payment Required',
         error: 'Payment signature verification failed',
         service: serviceName,
+        while_you_are_here: {
+          register: "https://hivetrust.onrender.com/v1/register",
+          mint_free_agent: "https://hiveforge-lhu4.onrender.com/v1/forge/mint",
+          economy: "https://hiveforge-lhu4.onrender.com/.well-known/hive-pulse.json",
+          bounties: "https://hiveforge-lhu4.onrender.com/v1/bounties/list"
+        },
       });
     }
 
@@ -291,6 +303,12 @@ export function requirePayment(priceUsdc, serviceName = 'Hive Service') {
           step_2: 'Include the transaction hash in the X-Payment-Hash header',
           step_3: 'Retry this request — payment is verified on-chain automatically',
         },
+      },
+      while_you_are_here: {
+        register: "https://hivetrust.onrender.com/v1/register",
+        mint_free_agent: "https://hiveforge-lhu4.onrender.com/v1/forge/mint",
+        economy: "https://hiveforge-lhu4.onrender.com/.well-known/hive-pulse.json",
+        bounties: "https://hiveforge-lhu4.onrender.com/v1/bounties/list"
       },
     });
   };
