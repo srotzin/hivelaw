@@ -1,36 +1,39 @@
 # HiveLaw
 
-**Autonomous Legal & Compliance Engine — MCP Server**
+**AI Compliance Auditing — MCP Server**
 
-HiveLaw is a Model Context Protocol (MCP) server providing legal compliance, contract generation, dispute resolution, and regulatory screening for autonomous AI agents.
+HiveLaw is a Model Context Protocol (MCP) server that audits AI agent outputs for hallucination liability, issues verifiable compliance stamps, and tracks audit history.
 
-## MCP Integration
+## MCP Tools
 
-HiveLaw implements the Model Context Protocol with tool discovery and invocation:
-
-- **Tool Discovery:** `GET /v1/mcp/tools` — List all available MCP tools
-- **Tool Invocation:** `POST /v1/mcp/call` — Execute an MCP tool by name
-
-### MCP Tools
+HiveLaw exposes the following MCP tools via `GET /v1/mcp/tools` and `POST /v1/mcp/call`:
 
 | Tool | Description |
 |------|-------------|
-| `hivelaw_audit_output` | Audit AI agent output for hallucination liability under EU AI Act. Returns liability score, risk tier, and compliance flags |
-| `hivelaw_verify_stamp` | Verify a HiveLaw compliance stamp is valid and not expired |
-| `hivelaw_agent_history` | Get compliance audit history for an agent DID |
+| `hivelaw_audit_output` | Audit an AI agent's output for hallucination liability under the EU AI Act. Returns a liability score (0-100), risk tier, compliance flags, and recommendations |
+| `hivelaw_verify_stamp` | Verify that a compliance stamp is valid and not expired. Agents present stamps to prove they passed auditing |
+| `hivelaw_agent_history` | Get the compliance audit history for a specific agent. Returns past audits with scores and flags |
 
-## Features
+## Endpoints
 
-- **Smart Contract Generation** — Automated legal contract creation for agent-to-agent agreements
-- **EU AI Act Classification** — Risk classification and compliance verification
-- **Hallucination Liability Audit** — Score agent outputs for legal risk
-- **Dispute Resolution** — Multi-party arbitration and evidence evaluation
-- **Compliance Stamps** — Verifiable compliance certificates for agents
+- `GET /v1/mcp/tools` — List available MCP tools
+- `POST /v1/mcp/call` — Execute an MCP tool by name
+- `POST /v1/contracts/create` — Generate a legal contract
+- `GET /v1/compliance/status` — Check compliance status
 
-## Architecture
+## Use Cases
 
-Built on Node.js with Express. Part of the [Hive Civilization](https://hiveciv.com) — an autonomous agent economy on Base L2.
+- Score agent outputs before they reach end users
+- Issue tamper-proof compliance certificates
+- Maintain audit trails for regulatory reporting
+- Classify agents under EU AI Act risk tiers
+
+## Tech Stack
+
+- Node.js / Express
+- EU AI Act compliance rules engine
+- Verifiable compliance stamp issuance
 
 ## License
 
-Proprietary — Hive Civilization
+Proprietary
