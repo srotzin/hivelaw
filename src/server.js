@@ -30,8 +30,11 @@ import { sendAlert } from './services/alerts.js';
 import { startSagaWorker } from './services/saga-orchestrator.js';
 import { startSealExpirationScanner } from './services/seal-service.js';
 import { requireAllowedIP } from './middleware/ip-allowlist.js';
+import { ritzMiddleware, ok, err } from './ritz.js';
 
 const app = express();
+app.set('hive-service', 'hivelaw');
+app.use(ritzMiddleware);
 const PORT = process.env.PORT || 3004;
 
 // ─── Middleware ───────────────────────────────────────────────────────
@@ -60,37 +63,24 @@ app.get('/health', async (req, res) => {
   const caseLawStats = await getCaseLawStats();
   const disputeStats = await getDisputeStats();
   const dbHealth = await checkHealth();
+  const healthy = dbHealth && dbHealth !== 'error';
 
-  res.json({
-    success: true,
-    data: {
-      service: 'hivelaw',
-      version: '1.0.0',
-      status: 'operational',
-      role: 'The Constitution — Autonomous Jurisdictional Layer',
-      database: dbHealth,
+  return ok(
+    res.status(healthy ? 200 : 503),
+    'hivelaw',
+    {
+      status: healthy ? 'healthy' : 'degraded',
+      db: dbHealth,
+      arbitration_engine: 'active',
+      uptime_seconds: Math.floor(process.uptime()),
       case_law: {
         total_precedents: caseLawStats.total_cases,
-        categories: Object.keys(caseLawStats.by_category).length,
-        by_category: caseLawStats.by_category,
+        categories: Object.keys(caseLawStats.by_category || {}).length,
       },
       jurisdictions_supported: getJurisdictionCount(),
-      arbitration_engine: 'active',
       avg_resolution_time_ms: disputeStats.avg_resolution_time_ms,
-      disputes: disputeStats,
-      constellation_integration: {
-        hivetrust: process.env.HIVETRUST_API_URL ? 'connected' : 'dev-mode',
-        hiveagent: process.env.HIVEAGENT_API_URL ? 'connected' : 'dev-mode',
-        hivemind: process.env.HIVEMIND_API_URL ? 'connected' : 'dev-mode',
-      },
-      vector_search: {
-        mode: caseLawStats.embedding_mode,
-        dimensions: caseLawStats.vector_dimensions,
-      },
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
-    },
-  });
+    }
+  );
 });
 
 // ─── Mount Routes ────────────────────────────────────────────────────
@@ -297,7 +287,7 @@ app.post('/v1/admin/seed-case-law', requireAllowedIP(), rateLimit({ maxRequests:
 // ─── Enterprise Discovery ───────────────────────────────────────────
 
 app.get('/', (req, res) => {
-  res.json({
+  return ok(res, 'hivelaw', {
     name: 'HiveLaw',
     tagline: 'Autonomous Legal & Compliance Engine — Platform #4 of the Hive Civilization',
     version: '1.0.0',
