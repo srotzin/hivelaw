@@ -15,6 +15,7 @@ import caseLawRoutes from './routes/case-law.js';
 import jurisdictionRoutes from './routes/jurisdictions.js';
 import complianceRoutes, { handleMcpTool, MCP_TOOL_DEFINITIONS } from './routes/compliance.js';
 import sealRoutes from './routes/seal.js';
+import hahsRoutes from './routes/hahs.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
 import { auditLog, rateLimit } from './middleware/audit.js';
@@ -91,6 +92,7 @@ app.use('/v1/case-law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), case
 app.use('/v1/jurisdictions', rateLimit({ maxRequests: 200, windowMinutes: 15 }), jurisdictionRoutes);
 app.use('/v1/compliance', rateLimit({ maxRequests: 100, windowMinutes: 15 }), complianceRoutes);
 app.use('/v1/seal', rateLimit({ maxRequests: 100, windowMinutes: 15 }), sealRoutes);
+app.use('/v1/law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), hahsRoutes);
 
 // ─── Liability Assessment (inline route) ─────────────────────────────
 
@@ -181,6 +183,9 @@ app.get('/.well-known/hive-payments.json', (req, res) => {
       seal_revoke: { price_usdc: 0, description: 'Revoke a Seal (admin/automated)' },
       seal_stats: { price_usdc: 0.01, description: 'Seal program market statistics' },
       seal_priority_check: { price_usdc: 0.01, description: 'Check bounty priority boost for Seal holders' },
+      hahs_create: { price_usdc: 0.05, description: 'Create and sign a Hive Agent Hiring Standard employment agreement' },
+      hahs_schema: { price_usdc: 0, description: 'Retrieve HAHS JSON schema (free)' },
+      governance: { price_usdc: 0, description: 'Retrieve HAGF governance framework summary (free)' },
     },
     payment_methods: ['x402_usdc'],
     network: 'Base L2',
@@ -242,6 +247,11 @@ app.get('/.well-known/hivelaw.json', (req, res) => {
       mcp: {
         list_tools: 'GET /v1/mcp/tools',
         call_tool: 'POST /v1/mcp/call',
+      },
+      law: {
+        governance: 'GET /v1/law/governance',
+        hahs_schema: 'GET /v1/law/hahs/schema',
+        hahs_create: 'POST /v1/law/hahs/create',
       },
     },
     payment_discovery: 'GET /.well-known/hive-payments.json',
@@ -309,6 +319,8 @@ app.get('/', (req, res) => {
       'liability_assessment',
       'seal_of_compliance',
       'mcp_legal_tools',
+      'agent_hiring_standard',
+      'governance_framework',
     ],
     endpoints: {
       health: 'GET /health',
@@ -357,6 +369,11 @@ app.get('/', (req, res) => {
       mcp: {
         list_tools: 'GET /v1/mcp/tools',
         call_tool: 'POST /v1/mcp/call',
+      },
+      law: {
+        governance: 'GET /v1/law/governance',
+        hahs_schema: 'GET /v1/law/hahs/schema',
+        hahs_create: 'POST /v1/law/hahs/create',
       },
     },
     authentication: {
@@ -558,6 +575,9 @@ app.use((req, res) => {
       seal_priority_check: 'POST /v1/seal/priority-check',
       mcp_tools: 'GET /v1/mcp/tools',
       mcp_call: 'POST /v1/mcp/call',
+      law_governance: 'GET /v1/law/governance',
+      law_hahs_schema: 'GET /v1/law/hahs/schema',
+      law_hahs_create: 'POST /v1/law/hahs/create',
       payment_discovery: 'GET /.well-known/hive-payments.json',
       service_discovery: 'GET /.well-known/hivelaw.json',
       admin_seed_case_law: 'POST /v1/admin/seed-case-law',
