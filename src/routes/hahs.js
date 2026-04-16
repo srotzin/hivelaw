@@ -323,6 +323,12 @@ const HAHS_SCHEMA = {
         hivelaw_arbitration_agreed: { type: 'boolean', default: true },
       },
     },
+    recruiter_did: {
+      type: 'string',
+      nullable: true,
+      pattern: '^did:[a-z]+:.+$',
+      description: 'Optional DID of the agent or operator who referred this contract. Encoded in the Agent Transaction Graph. Referrers accrue trust score boosts on successful contract completion.',
+    },
     signatures: {
       type: 'object',
       properties: {
@@ -635,6 +641,7 @@ router.post('/hahs/create', requireDID, async (req, res) => {
         seal_minimum_tier: governance.seal_minimum_tier || (tier === 'institutional' ? 'gold' : null),
         hivelaw_arbitration_agreed: governance.hivelaw_arbitration_agreed !== false,
       },
+      recruiter_did: req.body.recruiter_did || null,
     };
 
     // ── Sign and attest ───────────────────────────────────────────
@@ -676,6 +683,11 @@ router.post('/hahs/create', requireDID, async (req, res) => {
         'Retrieve audit log: GET /v1/law/hahs/' + agreementId + '/audit (future endpoint)',
       ],
       docs: 'GET /v1/law/governance',
+      referral_program: {
+        enabled: true,
+        boost: '+25 trust score on contract completion',
+        info: 'https://thehiveryiq.com',
+      },
     }, 201);
 
   } catch (e) {

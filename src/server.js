@@ -16,6 +16,7 @@ import jurisdictionRoutes from './routes/jurisdictions.js';
 import complianceRoutes, { handleMcpTool, MCP_TOOL_DEFINITIONS } from './routes/compliance.js';
 import sealRoutes from './routes/seal.js';
 import hahsRoutes from './routes/hahs.js';
+import verifiedRouter from './routes/verified.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
 import { auditLog, rateLimit } from './middleware/audit.js';
@@ -93,6 +94,7 @@ app.use('/v1/jurisdictions', rateLimit({ maxRequests: 200, windowMinutes: 15 }),
 app.use('/v1/compliance', rateLimit({ maxRequests: 100, windowMinutes: 15 }), complianceRoutes);
 app.use('/v1/seal', rateLimit({ maxRequests: 100, windowMinutes: 15 }), sealRoutes);
 app.use('/v1/law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), hahsRoutes);
+app.use('/v1/law/verified', rateLimit({ maxRequests: 200, windowMinutes: 15 }), verifiedRouter);
 
 // ─── Liability Assessment (inline route) ─────────────────────────────
 
