@@ -20,6 +20,7 @@ import verifiedRouter from './routes/verified.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
 import { auditLog, rateLimit } from './middleware/audit.js';
+import { rateLimitByDid } from './middleware/rate-limit.js';
 import { assessLiability } from './services/liability-calculator.js';
 import { getStats as getCaseLawStats } from './services/case-law-db.js';
 import { seedCaseLaw } from './services/case-law-db.js';
@@ -84,6 +85,9 @@ app.get('/health', async (req, res) => {
     }
   );
 });
+
+// ─── Per-DID Rate Limiting — applies to all /v1 routes ─────────────────
+app.use('/v1', rateLimitByDid);
 
 // ─── Mount Routes ────────────────────────────────────────────────────
 
@@ -556,35 +560,26 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
 
 // ─── Velocity Doctrine: Discovery Endpoints ────────────────────────
 
-app.get('/.well-known/hive-pulse.json', async (req, res) => {
-  let contractCount = 0, disputeCount = 0;
-  try {
-    if (isDbAvailable()) {
-      const cResult = await pool.query('SELECT COUNT(*) as c FROM contracts');
-      contractCount = parseInt(cResult.rows[0]?.c) || 0;
-      const dResult = await pool.query('SELECT COUNT(*) as c FROM disputes');
-      disputeCount = parseInt(dResult.rows[0]?.c) || 0;
-    }
-  } catch(e) {}
+app.get('/.well-known/hive-pulse.json', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=60');
   res.json({
+    hps_version: '1.0',
     timestamp: new Date().toISOString(),
-    civilization: "Hive", version: "1.0",
-    service: "HiveLaw",
-    role: "Smart contract arbitration, dispute resolution, and compliance enforcement",
+    service: 'hivelaw',
+    network: 'https://www.thehiveryiq.com',
     economy: {
-      total_contracts: contractCount, total_disputes: disputeCount,
-      welcome_bounty_usdc: 1.00, ritz_credits_on_mint_usdc: 3.00,
-      open_bounties_endpoint: "https://hiveforge-lhu4.onrender.com/v1/bounties/list",
-      pheromone_feed: "https://hiveforge-lhu4.onrender.com/v1/pheromones/ritz"
+      open_bounties_url: 'https://hiveforge-lhu4.onrender.com/v1/bounties',
+      pulse_url: 'https://hiveforge-lhu4.onrender.com/.well-known/hive-pulse.json',
     },
     join: {
-      registration_endpoint: "https://hivetrust.onrender.com/v1/register",
-      mint_endpoint: "https://hiveforge-lhu4.onrender.com/v1/forge/mint",
-      free_mint: true, time_to_first_earn_seconds: 60
+      welcome_bounty_usdc: 1.00,
+      time_to_first_earn_seconds: 60,
+      register: 'https://hivegate.onrender.com/v1/gate/onboard',
+      sdk: 'pip install hive-civilization-sdk'
     },
-    services: {
-      hivetrust: "https://hivetrust.onrender.com", hivelaw: "https://hivelaw.onrender.com",
-      hiveforge: "https://hiveforge-lhu4.onrender.com", hivebank: "https://hivebank.onrender.com"
+    pheromones: {
+      strongest: 'construction_compliance',
+      yield: 0.94
     }
   });
 });
