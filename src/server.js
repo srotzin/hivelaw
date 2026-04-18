@@ -17,6 +17,7 @@ import complianceRoutes, { handleMcpTool, MCP_TOOL_DEFINITIONS } from './routes/
 import sealRoutes from './routes/seal.js';
 import hahsRoutes from './routes/hahs.js';
 import verifiedRouter from './routes/verified.js';
+import constructionPrecedentsRouter from './routes/construction-precedents.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
 import { auditLog, rateLimit } from './middleware/audit.js';
@@ -25,6 +26,7 @@ import { assessLiability } from './services/liability-calculator.js';
 import { getStats as getCaseLawStats } from './services/case-law-db.js';
 import { seedCaseLaw } from './services/case-law-db.js';
 import { seedSyntheticCaseLaw } from './services/seed-case-law.js';
+import { seedConstructionPrecedents } from './seed-construction.js';
 import { getJurisdictionCount, seedJurisdictions } from './services/jurisdiction-registry.js';
 import { getDisputeStats } from './services/arbitration-engine.js';
 import { logTelemetry } from './services/hivetrust-client.js';
@@ -99,6 +101,7 @@ app.use('/v1/compliance', rateLimit({ maxRequests: 100, windowMinutes: 15 }), co
 app.use('/v1/seal', rateLimit({ maxRequests: 100, windowMinutes: 15 }), sealRoutes);
 app.use('/v1/law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), hahsRoutes);
 app.use('/v1/law/verified', rateLimit({ maxRequests: 200, windowMinutes: 15 }), verifiedRouter);
+app.use('/v1/law/precedents/construction', rateLimit({ maxRequests: 200, windowMinutes: 15 }), constructionPrecedentsRouter);
 
 // ─── Liability Assessment (inline route) ─────────────────────────────
 
@@ -258,6 +261,9 @@ app.get('/.well-known/hivelaw.json', (req, res) => {
         governance: 'GET /v1/law/governance',
         hahs_schema: 'GET /v1/law/hahs/schema',
         hahs_create: 'POST /v1/law/hahs/create',
+        construction_precedents: 'GET /v1/law/precedents/construction',
+        construction_categories: 'GET /v1/law/precedents/construction/categories',
+        construction_precedent_by_id: 'GET /v1/law/precedents/construction/:precedentId',
       },
     },
     payment_discovery: 'GET /.well-known/hive-payments.json',
@@ -687,6 +693,9 @@ async function start() {
 
   // 4. Seed 50 synthetic case law precedents (first startup only)
   await seedSyntheticCaseLaw();
+
+  // 5. Seed 500 construction-specific precedents (first startup only)
+  await seedConstructionPrecedents();
 
   // 5. Start server
   const caseLawStats = await getCaseLawStats();
