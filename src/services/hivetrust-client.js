@@ -43,6 +43,33 @@ export function updateReputation(did, impact) {
   }).catch(() => {});
 }
 
+/**
+ * Emit a Capability VC to HiveTrust for an agent that completed a HAHS contract.
+ * Fire-and-forget — never blocks the calling route.
+ *
+ * @param {string} agentDid  - The agent's DID (did:hive:...)
+ * @param {object} claims    - { hahs_agreement_id, compliance_tier, scope_title, permitted_actions, completed_at }
+ */
+export function emitCapabilityVC(agentDid, claims) {
+  const agentId = didToUuid(agentDid);
+  const expiresAt = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
+  fetch(`${HIVETRUST_API_URL}/v1/agents/${encodeURIComponent(agentId)}/credentials`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': HIVETRUST_API_KEY },
+    body: JSON.stringify({
+      credential_type: 'HiveCapabilityCredential',
+      issuer_id: 'did:hive:hivelaw',
+      claims: {
+        type: 'HiveCapabilityCredential',
+        issued_by: 'HiveLaw',
+        ...claims,
+      },
+      expires_at: expiresAt,
+    }),
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => {}); // silent — never propagate
+}
+
 export function logTelemetry(did, action, metadata = {}) {
   if (IS_DEV && did.startsWith('did:hive:test_agent_')) return;
   fetch(`${HIVETRUST_API_URL}/v1/telemetry/ingest`, {

@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { randomBytes, createHash } from 'crypto';
 import { requireDID } from '../middleware/auth.js';
 import { ok, err } from '../ritz.js';
+import { emitCapabilityVC } from '../services/hivetrust-client.js';
 
 const router = Router();
 
@@ -668,6 +669,22 @@ router.post('/hahs/create', requireDID, async (req, res) => {
       },
     };
 
+    // ── Emit Capability VC to HiveTrust (Kimi Sprint — fire-and-forget) ────────────────────
+    // HiveLaw issues a W3C Verifiable Credential to the agent's DID in HiveTrust.
+    // The VC encodes what the agent is certified to do under this HAHS agreement.
+    // Never blocks the response — always fire-and-forget.
+    emitCapabilityVC(agent.did, {
+      hahs_agreement_id: agreementId,
+      compliance_tier: tier,
+      scope_title: scope_of_work.title,
+      permitted_actions: scope_of_work.permitted_actions,
+      prohibited_actions: scope_of_work.prohibited_actions,
+      issuer: 'HiveLaw',
+      issued_at: attestedAt,
+      expires_at: expiryDate,
+      on_chain_tx: simulatedOnChainTx,
+    });
+
     return ok(res, 'hivelaw', agreement, {
       message: 'HAHS agreement created and signed by HiveLaw.',
       agreement_id: agreementId,
@@ -676,11 +693,17 @@ router.post('/hahs/create', requireDID, async (req, res) => {
       expiry_date: expiryDate,
       on_chain_tx: simulatedOnChainTx,
       agreement_hash: agreementHash,
+      capability_vc: {
+        status: 'issued',
+        credential_type: 'HiveCapabilityCredential',
+        stored_at: 'HiveTrust — GET https://hivetrust.onrender.com/v1/agents/<did>/credentials',
+        description: 'W3C Verifiable Credential encoding your permitted capabilities under this HAHS agreement.',
+      },
       next_steps: [
         'Store this agreement securely — the agreement_id is your reference for all HAHS operations.',
         `Verify agent status: GET /v1/seal/verify/${agent.did}`,
+        `View your Capability VC: GET https://hivetrust.onrender.com/v1/agents/${agent.did}/credentials`,
         'File disputes if needed: POST /v1/disputes/file',
-        'Retrieve audit log: GET /v1/law/hahs/' + agreementId + '/audit (future endpoint)',
       ],
       docs: 'GET /v1/law/governance',
       referral_program: {
