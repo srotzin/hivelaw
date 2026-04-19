@@ -95,6 +95,8 @@ app.use('/v1', rateLimitByDid);
 
 app.use('/v1/contracts', rateLimit({ maxRequests: 100, windowMinutes: 15 }), contractRoutes);
 app.use('/v1/disputes', rateLimit({ maxRequests: 50, windowMinutes: 15 }), disputeRoutes);
+// HiveVaccine immune feed — also mounted at /v1/law/immune/* for canonical URL
+app.use('/v1/law', rateLimit({ maxRequests: 500, windowMinutes: 15 }), disputeRoutes);
 app.use('/v1/case-law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), caseLawRoutes);
 app.use('/v1/jurisdictions', rateLimit({ maxRequests: 200, windowMinutes: 15 }), jurisdictionRoutes);
 app.use('/v1/compliance', rateLimit({ maxRequests: 100, windowMinutes: 15 }), complianceRoutes);

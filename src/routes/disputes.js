@@ -4,6 +4,7 @@ import { requirePayment } from '../middleware/x402.js';
 import { fileAndArbitrate, appealDispute, getDispute, getDisputeStats } from '../services/arbitration-engine.js';
 import { logTelemetry } from '../services/hivetrust-client.js';
 import { sendAlert } from '../services/alerts.js';
+import { recordThreatSignature, getImmuneFeed } from '../services/vaccine.js';
 
 const router = Router();
 
@@ -46,6 +47,26 @@ router.post('/file', requireDID, requirePayment(0.50, 'Dispute Filing'), async (
       category,
       resolution_time_ms: result.dispute.arbitration.resolution_time_ms,
     });
+
+    // ── HiveVaccine: write threat signature if respondent is found liable ────────────
+    // Fire-and-forget — never blocks the response.
+    // Only records when the ruling goes AGAINST the filed_against party.
+    const ruling = result.dispute?.arbitration?.ruling;
+    const filedAgainst = result.dispute?.filed_against;
+    const rulingOutcome = ruling?.outcome;
+    const isLiable = rulingOutcome === 'provider_liable' || rulingOutcome === 'consumer_liable';
+    if (isLiable && filedAgainst && ruling) {
+      recordThreatSignature({
+        agentDid: filedAgainst,
+        category,
+        outcome: rulingOutcome,
+        confidenceScore: ruling.confidence_score ?? 0.5,
+        disputeId: result.dispute.dispute_id,
+        rulingSummary: ruling.ruling_summary || ruling.summary || '',
+        description,
+        evidence,
+      }).catch(() => {}); // truly fire-and-forget
+    }
 
     sendAlert('info', 'HiveLaw', `Dispute filed: ${result.dispute.dispute_id}`, {
       category,
@@ -120,6 +141,48 @@ router.post('/:disputeId/appeal', requireDID, requirePayment(0.50, 'Dispute Appe
     });
   } catch (err) {
     return res.status(500).json({ success: false, error: 'Appeal failed.', detail: err.message });
+  }
+});
+
+// ─── GET /v1/law/immune/feed — HiveVaccine public immune feed ─────────────────────
+//
+// No auth required — this is designed to be polled by any agent.
+// Returns threat signatures sorted by confidence DESC.
+// Citizens integrate this into their trust evaluation before interacting
+// with unknown agents — the social immune transmission Kimi specified.
+//
+// Query params:
+//   ?limit=50           - max results (default 50, max 200)
+//   ?category=          - filter by category
+//   ?min_confidence=0.4 - minimum confidence threshold
+router.get('/immune/feed', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const category = req.query.category || null;
+    const min_confidence = parseFloat(req.query.min_confidence) || 0.4;
+
+    const signatures = await getImmuneFeed({ limit, category, min_confidence });
+
+    return res.json({
+      success: true,
+      schema: 'hive-immune-feed/1.0',
+      description: 'HiveVaccine — threat signatures extracted from resolved HiveLaw disputes. Poll this feed to build immunity against known bad actors in the Hive network.',
+      generated_at: new Date().toISOString(),
+      count: signatures.length,
+      how_to_use: [
+        '1. Poll this feed periodically (recommended: every 30 minutes for active agents)',
+        '2. Before interacting with an unknown agent, check if their DID appears in this feed',
+        '3. Apply elevated scrutiny or refuse interaction if confidence >= 0.7',
+        '4. If you catch an attack that matches a signature here, file a dispute at POST /v1/disputes/file — successful confirmation raises the signature confidence',
+      ],
+      filter_options: {
+        categories: ['hallucination', 'non_performance', 'overcharge', 'data_breach', 'unauthorized_action'],
+        example: 'GET /v1/law/immune/feed?category=hallucination&min_confidence=0.6',
+      },
+      signatures,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'immune_feed_failed', detail: err.message });
   }
 });
 

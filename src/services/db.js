@@ -272,6 +272,35 @@ export async function initDatabase() {
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_seal_fee_did ON hivelaw.seal_fees(did)');
 
+    // ── HiveVaccine — Threat Signatures (immune system) ────────────────────────────────
+    // Written on every dispute resolution where the respondent is found liable.
+    // Served publicly via GET /v1/law/immune/feed — citizens poll this to build filters.
+    // confidence rises when the same agent_did appears in multiple resolved disputes.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hivelaw.threat_signatures (
+        id TEXT PRIMARY KEY,
+        agent_did TEXT NOT NULL,          -- the agent found liable
+        category TEXT NOT NULL,           -- hallucination | non_performance | overcharge | data_breach | unauthorized_action
+        behavior_tags TEXT[] DEFAULT '{}',-- extracted context tags for pattern matching
+        outcome TEXT NOT NULL,            -- provider_liable | consumer_liable
+        confidence NUMERIC(4,3) DEFAULT 0.5, -- 0.0-1.0, rises with repeat offenses
+        dispute_count INTEGER DEFAULT 1,  -- how many disputes contributed to this signature
+        dispute_id TEXT NOT NULL,         -- most recent dispute that updated this
+        ruling_summary TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_threat_agent_did ON hivelaw.threat_signatures(agent_did)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_threat_category ON hivelaw.threat_signatures(category)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_threat_confidence ON hivelaw.threat_signatures(confidence DESC)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_threat_updated ON hivelaw.threat_signatures(updated_at DESC)');
+    // Unique constraint on (agent_did, category) for UPSERT confidence accumulation
+    await pool.query(`
+      ALTER TABLE hivelaw.threat_signatures
+      ADD CONSTRAINT IF NOT EXISTS uq_threat_agent_category UNIQUE (agent_did, category)
+    `).catch(() => {}); // no-op if already exists
+
     dbAvailable = true;
     console.log('  [DB] PostgreSQL connected and schema initialized');
     return true;
