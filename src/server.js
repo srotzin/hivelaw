@@ -18,6 +18,7 @@ import sealRoutes from './routes/seal.js';
 import hahsRoutes from './routes/hahs.js';
 import verifiedRouter from './routes/verified.js';
 import constructionPrecedentsRouter from './routes/construction-precedents.js';
+import aiBriefRouter from './routes/ai-brief.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
 import { auditLog, rateLimit } from './middleware/audit.js';
@@ -104,6 +105,7 @@ app.use('/v1/seal', rateLimit({ maxRequests: 100, windowMinutes: 15 }), sealRout
 app.use('/v1/law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), hahsRoutes);
 app.use('/v1/law/verified', rateLimit({ maxRequests: 200, windowMinutes: 15 }), verifiedRouter);
 app.use('/v1/law/precedents/construction', rateLimit({ maxRequests: 200, windowMinutes: 15 }), constructionPrecedentsRouter);
+app.use('/v1/law/ai', rateLimit({ maxRequests: 100, windowMinutes: 15 }), aiBriefRouter);
 
 // ─── Liability Assessment (inline route) ─────────────────────────────
 
