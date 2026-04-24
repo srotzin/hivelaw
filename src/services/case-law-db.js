@@ -365,6 +365,16 @@ function rowToCaseLaw(row) {
   };
 }
 
+// ─── isSeeded — returns true if DB already has seed cases ───────────────────
+export async function isSeeded() {
+  try {
+    const stats = await getStats();
+    return stats && stats.total_cases > 0;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Seed 5 initial precedent cases ─────────────────────────────────
 
 export async function seedCaseLaw() {
