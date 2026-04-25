@@ -6,6 +6,8 @@ import { fileAndArbitrate, appealDispute, getDispute, getDisputeStats } from '..
 import { logTelemetry } from '../services/hivetrust-client.js';
 import { sendAlert } from '../services/alerts.js';
 import { recordThreatSignature, getImmuneFeed } from '../services/vaccine.js';
+// Leaked-key purge 2026-04-25: lazy read, fail closed if env missing.
+import { getInternalKey } from '../lib/internal-key.js';
 
 const router = Router();
 
@@ -20,7 +22,7 @@ function generateDisputeZkProof(dispute) {
     resolved: dispute.status === 'resolved',
     winning_party_role: dispute.outcome?.winner_role || 'unknown', // 'claimant' or 'respondent'
     resolution_timestamp: dispute.resolved_at,
-    hive_law_sig: crypto.createHmac('sha256', process.env.HIVE_INTERNAL_KEY || 'hive_internal_125e04e071e8829be631ea0216dd4a0c9b707975fcecaf8c62c6a2ab43327d46')
+    hive_law_sig: crypto.createHmac('sha256', getInternalKey())
       .update(JSON.stringify({ case_id: dispute.id || dispute.dispute_id, outcome: dispute.outcome?.winner_role }))
       .digest('hex')
   };

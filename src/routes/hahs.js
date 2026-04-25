@@ -10,6 +10,8 @@ import { randomBytes, createHash } from 'crypto';
 import { requireDID } from '../middleware/auth.js';
 import { ok, err } from '../ritz.js';
 import { emitCapabilityVC } from '../services/hivetrust-client.js';
+// Leaked-key purge 2026-04-25: lazy read, fail closed if env missing.
+import { getInternalKey } from '../lib/internal-key.js';
 
 const router = Router();
 
@@ -21,8 +23,6 @@ const agreementStore = new Map();
 // Service URL constants used by the /complete route
 const HIVEBANK_URL  = process.env.HIVEBANK_URL  || 'https://hivebank.onrender.com';
 const HIVETRUST_URL = process.env.HIVETRUST_URL || 'https://hivetrust.onrender.com';
-const HIVE_INTERNAL_KEY = process.env.HIVE_INTERNAL_KEY ||
-  'hive_internal_125e04e071e8829be631ea0216dd4a0c9b707975fcecaf8c62c6a2ab43327d46';
 
 
 // ─── HAHS JSON Schema ────────────────────────────────────────────────
@@ -833,7 +833,7 @@ router.post('/hahs/:agreementId/complete', async (req, res) => {
           method:  'POST',
           headers: {
             'Content-Type':     'application/json',
-            'x-hive-internal':  HIVE_INTERNAL_KEY,
+            'x-hive-internal':  getInternalKey(),
           },
           body: JSON.stringify({
             from_did:          operatorDid,
@@ -868,7 +868,7 @@ router.post('/hahs/:agreementId/complete', async (req, res) => {
       // 4d. Fire-and-forget VC capability issuance
       fetch(`${HIVETRUST_URL}/v1/trust/vc/issue-capability`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'x-hive-internal': HIVE_INTERNAL_KEY },
+        headers: { 'Content-Type': 'application/json', 'x-hive-internal': getInternalKey() },
         body: JSON.stringify({
           agent_did:         agentDid,
           hahs_agreement_id: agreementId,
