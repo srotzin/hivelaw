@@ -6,11 +6,12 @@
  */
 
 import { Router } from 'express';
+// Leaked-key purge 2026-04-25: lazy read, fail closed if env missing.
+import { getInternalKey } from '../lib/internal-key.js';
 
 const router = Router();
 
 const HIVE_AI_URL = 'https://hive-ai-1.onrender.com/v1/chat/completions';
-const HIVE_KEY = process.env.HIVE_KEY || 'hive_internal_125e04e071e8829be631ea0216dd4a0c9b707975fcecaf8c62c6a2ab43327d46';
 const MODEL = 'meta-llama/llama-3.1-8b-instruct';
 const PRICE_USDC = 0.05;
 
@@ -55,7 +56,7 @@ Screen this contract for risk and provide a risk_level (low/medium/high) and rec
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${HIVE_KEY}`,
+          'Authorization': `Bearer ${getInternalKey()}`,
         },
         body: JSON.stringify({
           model: MODEL,

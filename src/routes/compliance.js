@@ -13,6 +13,8 @@ import crypto from 'crypto';
 import { requireDID } from '../middleware/auth.js';
 import { requirePayment } from '../middleware/x402.js';
 import { logTelemetry } from '../services/hivetrust-client.js';
+// Leaked-key purge 2026-04-25: lazy read, fail closed if env missing.
+import { getInternalKey } from '../lib/internal-key.js';
 import {
   auditOutput,
   batchAudit,
@@ -267,7 +269,7 @@ router.post('/zk-liability-proof', async (req, res) => {
     const threshold = 50;
 
     const signature = crypto
-      .createHmac('sha256', process.env.HIVE_INTERNAL_KEY || 'hive_internal_125e04e071e8829be631ea0216dd4a0c9b707975fcecaf8c62c6a2ab43327d46')
+      .createHmac('sha256', getInternalKey())
       .update(JSON.stringify({ agent_did, output_hash, liability_above_threshold }))
       .digest('hex');
 

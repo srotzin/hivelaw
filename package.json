@@ -1,12 +1,13 @@
 {
   "name": "hivelaw",
   "version": "1.0.0",
-  "description": "HiveLaw — The Constitution. Autonomous jurisdictional layer for the Hive Constellation.",
+  "description": "HiveLaw \u2014 The Constitution. Autonomous jurisdictional layer for the Hive Constellation.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/"
   },
   "dependencies": {
     "@sentry/node": "^9.1.0",
