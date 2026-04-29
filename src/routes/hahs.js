@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { randomBytes, createHash } from 'crypto';
 import { requireDID } from '../middleware/auth.js';
+import { requirePayment } from '../middleware/x402.js';
 import { ok, err } from '../ritz.js';
 import { emitCapabilityVC } from '../services/hivetrust-client.js';
 // Leaked-key purge 2026-04-25: lazy read, fail closed if env missing.
@@ -486,7 +487,9 @@ router.get('/hahs/schema', (req, res) => {
  * Optional body fields (filled with smart defaults if absent):
  *   effective_date_iso, expiry_date_iso, data_rights, audit, termination
  */
-router.post('/hahs/create', requireDID, async (req, res) => {
+// POST /v1/law/hahs/create — $99 per HAHS contract (HAHS template library pricing)
+// First call free (BOGO). Every 6th paid call free (loyalty).
+router.post('/hahs/create', requireDID, requirePayment(99, 'HAHS Contract Creation — HiveLaw'), async (req, res) => {
   try {
     const {
       operator,

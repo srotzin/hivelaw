@@ -100,6 +100,8 @@ app.use('/v1/disputes', rateLimit({ maxRequests: 50, windowMinutes: 15 }), dispu
 app.use('/v1/law', rateLimit({ maxRequests: 500, windowMinutes: 15 }), disputeRoutes);
 app.use('/v1/case-law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), caseLawRoutes);
 app.use('/v1/jurisdictions', rateLimit({ maxRequests: 200, windowMinutes: 15 }), jurisdictionRoutes);
+// Monitoring subscribe is nested under jurisdictions router at /monitoring/subscribe
+app.use('/v1', rateLimit({ maxRequests: 100, windowMinutes: 15 }), jurisdictionRoutes);
 app.use('/v1/compliance', rateLimit({ maxRequests: 100, windowMinutes: 15 }), complianceRoutes);
 app.use('/v1/seal', rateLimit({ maxRequests: 100, windowMinutes: 15 }), sealRoutes);
 app.use('/v1/law', rateLimit({ maxRequests: 200, windowMinutes: 15 }), hahsRoutes);
@@ -580,6 +582,28 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
       currency: 'USDC',
       network: 'base',
       address: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e',
+      secondary_rails: [
+        { currency: 'USDT', network: 'base',   address: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e' },
+        { currency: 'USDC', network: 'solana', address: 'B1N61cuL35fhskWz5dw8XqDyP6LWi3ZWmq8CNA9L3FVn' },
+      ],
+      fee_schedule: {
+        eu_ai_act_cert:     { endpoint: 'POST /v1/compliance/issue-compliance-stamp', amount_usdc: '500-5000', model: 'sliding_scale', note: 'EU AI Act conformance attestation; $500-$5,000 sliding scale by org size' },
+        gdpr_audit:         { endpoint: 'POST /v1/compliance/audit-output',           amount_usdc: 200,    model: 'per_audit',    note: 'GDPR audit run + Spectral-signed attestation; $200/audit' },
+        compliance_audit:   { endpoint: 'POST /v1/compliance/batch-audit',            amount_usdc: 200,    model: 'per_audit',    note: 'Batch compliance audit; $200' },
+        compliance_stamp:   { endpoint: 'POST /v1/compliance/issue-compliance-stamp', amount_usdc: 0.50,   model: 'per_stamp',    note: 'Compliance stamp issuance; $0.50' },
+        seal_application:   { endpoint: 'POST /v1/seal/apply',                        amount_usdc: 999,    model: 'per_seal',     note: 'Seal of Compliance application; $999' },
+        seal_renewal:       { endpoint: 'POST /v1/seal/renew/:id',                    amount_usdc: 100,    model: 'annual',       note: 'Seal renewal; $100/year' },
+        hahs_contract:      { endpoint: 'POST /v1/law/hahs/create',                   amount_usdc: 99,     model: 'per_contract', note: 'HAHS agent hiring contract creation + Spectral-signed attestation; $99' },
+        dispute_filing:     { endpoint: 'POST /v1/disputes/file',                     amount_usdc: 0.50,   model: 'per_filing',   note: 'Dispute filing; $0.50' },
+        jurisdiction_audit: { endpoint: 'GET /v1/jurisdictions/:code/compliance-check', amount_usdc: 200,  model: 'per_check',    note: 'Jurisdiction compliance check; $200' },
+        monitoring_sub:     { endpoint: 'POST /v1/monitoring/subscribe',              amount_usdc: 50,     model: 'monthly',      note: 'Ongoing regulation monitoring; $50/mo per regulation tracked' },
+        case_law_query:     { endpoint: 'GET /v1/case-law/query-paid',                amount_usdc: 0.001,  model: 'per_query',    note: 'Precedent case law query; $0.001' },
+        custom_legal:       { note: 'Custom legal opinion: $1,000+ (human-in-the-loop via protocol@hiveagentiq.com)' },
+        bogo_first_call_free: { note: 'First call free — add x-hive-did header' },
+        bogo_loyalty:         { note: 'Every 6th paid call free (loyalty threshold: 6)' },
+      },
+      partner_shape: 'Regulators ship rules; HiveLaw packages them for agents. Compliance-as-a-service.',
+      treasury: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e',
     },
     extensions: {
       hive_pricing: {
@@ -595,7 +619,8 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
       first_call_free: true,
       loyalty_threshold: 6,
       pitch: "Pay this once, your 6th paid call is on the house. New here? Add header 'x-hive-did' to claim your first call free.",
-      claim_with: 'x-hive-did header'
+      claim_with: 'x-hive-did header',
+      receipt_chain: 'Every compliance cert and HAHS contract auto-emits a Spectral-signed attestation receipt — verify at POST https://hive-receipt.onrender.com/v1/receipts/verify',
     },
   });
 });
