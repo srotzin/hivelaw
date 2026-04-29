@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { requireDID } from '../middleware/auth.js';
 import { requirePayment } from '../middleware/x402.js';
 import { listJurisdictions, getJurisdictionDetails, checkCompliance } from '../services/jurisdiction-registry.js';
@@ -32,7 +33,7 @@ router.get('/:code', (req, res) => {
  * Fee: $200 per GDPR audit run (per task spec / monetization proforma).
  * Sliding scale applied by org size: $500-$5,000 for EU AI Act cert (handled in /compliance routes).
  */
-router.get('/:code/compliance-check', requireDID, requirePayment(200, 'Jurisdiction Compliance Audit — HiveLaw'), (req, res) => {
+router.get('/:code/compliance-check', requirePayment(200, 'Jurisdiction Compliance Audit — HiveLaw'), requireDID, (req, res) => {
   const { contract_type = 'service_agreement' } = req.query;
   const result = checkCompliance(req.params.code.toUpperCase(), contract_type);
   if (result.error) return res.status(404).json({ success: false, error: result.error });
@@ -44,8 +45,7 @@ router.get('/:code/compliance-check', requireDID, requirePayment(200, 'Jurisdict
  * Fee: $50/mo per regulation tracked (per task spec).
  * x402: $50 USDC monthly, charged at subscribe-time.
  */
-import { randomUUID } from 'crypto';
-router.post('/monitoring/subscribe', requireDID, requirePayment(50, 'Regulation Monitoring Subscription — HiveLaw'), (req, res) => {
+router.post('/monitoring/subscribe', requirePayment(50, 'Regulation Monitoring Subscription — HiveLaw'), requireDID, (req, res) => {
   const { did, regulation_code, org_name } = req.body;
   if (!regulation_code) {
     return res.status(400).json({ success: false, error: 'regulation_code is required', example: 'EU_AI_ACT, GDPR, HAHS, CCPA' });

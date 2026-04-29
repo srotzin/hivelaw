@@ -489,7 +489,7 @@ router.get('/hahs/schema', (req, res) => {
  */
 // POST /v1/law/hahs/create — $99 per HAHS contract (HAHS template library pricing)
 // First call free (BOGO). Every 6th paid call free (loyalty).
-router.post('/hahs/create', requireDID, requirePayment(99, 'HAHS Contract Creation — HiveLaw'), async (req, res) => {
+router.post('/hahs/create', requirePayment(99, 'HAHS Contract Creation — HiveLaw'), requireDID, async (req, res) => {
   try {
     const {
       operator,
