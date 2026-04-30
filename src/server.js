@@ -21,6 +21,7 @@ import constructionPrecedentsRouter from './routes/construction-precedents.js';
 import aiBriefRouter from './routes/ai-brief.js';
 import { requireDID } from './middleware/auth.js';
 import { requirePayment } from './middleware/x402.js';
+import mppMiddleware from './middleware/mpp.js';
 import { auditLog, rateLimit } from './middleware/audit.js';
 import { rateLimitByDid } from './middleware/rate-limit.js';
 import { assessLiability } from './services/liability-calculator.js';
@@ -65,6 +66,81 @@ app.use(auditLog('hivelaw', 'hivelaw'));
 
 // ─── Health Endpoint ─────────────────────────────────────────────────
 
+// ─── MPP OpenAPI Discovery (public) ──────────────────────────────────────────
+// Required for MPPScan auto-discovery and mppx compatibility
+app.get('/openapi.json', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({
+    openapi: '3.0.3',
+    info: {
+      title: 'HiveLaw — AI Legal Contracts & Compliance API',
+      version: '1.0.0',
+      description: 'Stream B compliance tiers and legal contract services. USDC on Tempo/Base. Accepts x402 and MPP rails.',
+      contact: { name: 'Hive Civilization', url: 'https://thehiveryiq.com', email: 'steve@thehiveryiq.com' },
+    },
+    servers: [{ url: 'https://hivelaw.onrender.com' }],
+    'x-mpp': {
+      realm: 'hivelaw.onrender.com',
+      payment: { method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, recipient: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e' },
+      rails: ['x402', 'mpp'],
+      categories: ['compliance', 'legal'],
+      integration: 'first-party',
+      tags: ['law', 'contracts', 'compliance', 'legal', 'disputes', 'stream-b'],
+      treasury: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e',
+    },
+    paths: {
+      '/v1/law/contract/draft': {
+        post: {
+          summary: 'Draft legal contract',
+          description: 'AI-generated contract draft. $0.50 USDC.',
+          'x-mpp-charge': { amount: '500000', intent: 'charge' },
+          responses: { '200': { description: 'Contract drafted' }, '402': { description: 'Payment required — x402 or MPP' } },
+        },
+      },
+      '/v1/law/contract/review': {
+        post: {
+          summary: 'AI contract review',
+          description: 'Legal risk review of a contract. $0.50 USDC.',
+          'x-mpp-charge': { amount: '500000', intent: 'charge' },
+          responses: { '200': { description: 'Review complete' }, '402': { description: 'Payment required' } },
+        },
+      },
+      '/v1/law/contract/seal': {
+        post: {
+          summary: 'Seal contract on-chain',
+          description: 'Spectral-sign and record contract. $0.50 USDC.',
+          'x-mpp-charge': { amount: '500000', intent: 'charge' },
+          responses: { '200': { description: 'Contract sealed' }, '402': { description: 'Payment required' } },
+        },
+      },
+      '/v1/comply/start': {
+        post: {
+          summary: 'Start Starter compliance tier',
+          description: 'Activate Starter compliance tier. $500.00 USDC.',
+          'x-mpp-charge': { amount: '500000000', intent: 'charge' },
+          responses: { '200': { description: 'Tier activated' }, '402': { description: 'Payment required' } },
+        },
+      },
+      '/v1/comply/start/pro': {
+        post: {
+          summary: 'Start Pro compliance tier',
+          description: 'Activate Pro compliance tier. $1500.00 USDC.',
+          'x-mpp-charge': { amount: '1500000000', intent: 'charge' },
+          responses: { '200': { description: 'Pro tier activated' }, '402': { description: 'Payment required' } },
+        },
+      },
+      '/v1/comply/start/enterprise': {
+        post: {
+          summary: 'Start Enterprise compliance tier',
+          description: 'Activate Enterprise compliance tier. $2500.00 USDC.',
+          'x-mpp-charge': { amount: '2500000000', intent: 'charge' },
+          responses: { '200': { description: 'Enterprise tier activated' }, '402': { description: 'Payment required' } },
+        },
+      },
+    },
+  });
+});
+
 app.get('/health', async (req, res) => {
   const caseLawStats = await getCaseLawStats();
   const disputeStats = await getDisputeStats();
@@ -91,6 +167,11 @@ app.get('/health', async (req, res) => {
 
 // ─── Per-DID Rate Limiting — applies to all /v1 routes ─────────────────
 app.use('/v1', rateLimitByDid);
+
+// MPP rail — runs after x402, grants access via MPP Payment header
+// Payment: scheme="mpp", tx_hash="0x...", rail="tempo", amount="0.50"
+// IETF draft-ryan-httpauth-payment compliant. Tempo + Base mainnet only.
+app.use('/v1', mppMiddleware);
 
 // ─── Mount Routes ────────────────────────────────────────────────────
 
