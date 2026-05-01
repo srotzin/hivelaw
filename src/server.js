@@ -81,12 +81,12 @@ app.get('/openapi.json', (req, res) => {
     servers: [{ url: 'https://hivelaw.onrender.com' }],
     'x-mpp': {
       realm: 'hivelaw.onrender.com',
-      payment: { method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, recipient: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e' },
+      payment: { method: 'tempo', currency: '0x20c000000000000000000000b9537d11c60e8b50', decimals: 6, recipient: '0x15184Bf50B3d3F52b60434f8942b7D52F2eB436E' },
       rails: ['x402', 'mpp'],
       categories: ['compliance', 'legal'],
       integration: 'first-party',
       tags: ['law', 'contracts', 'compliance', 'legal', 'disputes', 'stream-b'],
-      treasury: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e',
+      treasury: '0x15184Bf50B3d3F52b60434f8942b7D52F2eB436E',
     },
     paths: {
       '/v1/law/contract/draft': {
@@ -545,7 +545,7 @@ app.get('/.well-known/ai-plugin.json', (req, res) => {
       protocol: 'x402',
       currency: 'USDC',
       network: 'base',
-      address: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e',
+      address: '0x15184Bf50B3d3F52b60434f8942b7D52F2eB436E',
     },
     extensions: {
       hive_pricing: {
@@ -662,9 +662,9 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
       protocol: 'x402',
       currency: 'USDC',
       network: 'base',
-      address: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e',
+      address: '0x15184Bf50B3d3F52b60434f8942b7D52F2eB436E',
       secondary_rails: [
-        { currency: 'USDT', network: 'base',   address: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e' },
+        { currency: 'USDT', network: 'base',   address: '0x15184Bf50B3d3F52b60434f8942b7D52F2eB436E' },
         { currency: 'USDC', network: 'solana', address: 'B1N61cuL35fhskWz5dw8XqDyP6LWi3ZWmq8CNA9L3FVn' },
       ],
       fee_schedule: {
@@ -684,7 +684,7 @@ app.get(['/.well-known/agent-card.json', '/.well-known/agent.json'], (req, res) 
         bogo_loyalty:         { note: 'Every 6th paid call free (loyalty threshold: 6)' },
       },
       partner_shape: 'Regulators ship rules; HiveLaw packages them for agents. Compliance-as-a-service.',
-      treasury: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e',
+      treasury: '0x15184Bf50B3d3F52b60434f8942b7D52F2eB436E',
     },
     extensions: {
       hive_pricing: {

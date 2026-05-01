@@ -64,7 +64,7 @@ async function recordSpentPayment(txHash, amountUsdc, endpoint, did) {
 }
 
 // Base L2 constants
-const USDC_CONTRACT = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
+const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const BASE_CHAIN_ID = 8453;
 

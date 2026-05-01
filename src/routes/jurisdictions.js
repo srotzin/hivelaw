@@ -67,7 +67,7 @@ router.post('/monitoring/subscribe', requirePayment(50, 'Regulation Monitoring S
     network: 'base',
     payment_verified: req.paymentVerified || false,
     receipt_endpoint: 'POST https://hive-receipt.onrender.com/v1/receipts/sign',
-    _hive: { service: 'hivelaw', protocol: 'x402', treasury: '0x15184bf50b3d3f52b60434f8942b7d52f2eb436e' },
+    _hive: { service: 'hivelaw', protocol: 'x402', treasury: '0x15184Bf50B3d3F52b60434f8942b7D52F2eB436E' },
   });
 });
 
