@@ -296,6 +296,8 @@ router.post('/zk-liability-proof', async (req, res) => {
 
 // ─── MCP Tool Handler ───────────────────────────────────────────────
 
+const HIVE_BASE = process.env.HIVE_BASE || 'https://hivemorph.onrender.com';
+
 export async function handleMcpTool(toolName, params) {
   switch (toolName) {
     case 'hivelaw_audit_output': {
@@ -320,6 +322,18 @@ export async function handleMcpTool(toolName, params) {
     case 'hivelaw_agent_history': {
       const history = await getAgentHistory(params.agent_did, params.limit || 50);
       return { agent_did: params.agent_did, total_audits: history.length, audits: history };
+    }
+
+    case 'hivelaw_readiness_check': {
+      const res = await fetch(`${HIVE_BASE}/v1/audit/readiness`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+        signal: AbortSignal.timeout(15000),
+      });
+      let data;
+      try { data = await res.json(); } catch { data = { raw: await res.text() }; }
+      return { http_status: res.status, ...data };
     }
 
     default:
@@ -374,6 +388,24 @@ export const MCP_TOOL_DEFINITIONS = [
         limit: { type: 'number', description: 'Max results (default 50, max 200)' },
       },
       required: ['agent_did'],
+    },
+  },
+  {
+    name: 'hivelaw_readiness_check',
+    description: 'Compute multi-jurisdictional AI compliance readiness score with sourced penalty math (EU AI Act Art 99, Colorado AI Act SB 24-205, CCPA, Cal SB 942, NYC LL 144, HIPAA). Returns penalty exposure, Article-citing gaps, recommended audit tier, and nearest enforcement deadline. Free, no auth, 10/IP/hr.',
+    inputSchema: {
+      type: 'object',
+      required: ['organization_country', 'jurisdictions', 'data_volume_records', 'agent_count', 'monthly_inference_calls', 'frameworks'],
+      properties: {
+        organization_country: { type: 'string', description: 'ISO 3166-1 alpha-2 country code of the organization headquarters (e.g. "US", "DE", "FR", "GB").' },
+        jurisdictions: { type: 'array', items: { type: 'string' }, description: 'Where the system operates: ["EU", "US-CO", "US-CA", "US-NY", "US-TX", ...]. Drives which regulations apply.' },
+        data_volume_records: { type: 'integer', description: 'Total records processed (drives CCPA / GDPR scoping).' },
+        agent_count: { type: 'integer', description: 'Number of distinct AI agents in production.' },
+        monthly_inference_calls: { type: 'integer', description: 'Inference call volume per month (drives tier selection).' },
+        sectors: { type: 'array', items: { type: 'string' }, description: 'Industries: ["finance", "healthcare", "employment", "education", "lending", "insurance", "criminal_justice", "biometric", "critical_infrastructure"]. High-risk sectors trigger Annex III scoping.' },
+        frameworks: { type: 'array', items: { type: 'string' }, description: 'Regulations to score against: ["eu_ai_act", "co_ai_act", "ccpa", "ca_sb942", "nyc_ll144", "hipaa", "gdpr", "nist_ai_rmf"].' },
+        company: { type: 'string', description: 'Organization name (optional; populates the assessment record).' },
+      },
     },
   },
 ];
