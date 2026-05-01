@@ -38,6 +38,13 @@ import { startSagaWorker } from './services/saga-orchestrator.js';
 import { startSealExpirationScanner } from './services/seal-service.js';
 import { requireAllowedIP } from './middleware/ip-allowlist.js';
 import { ritzMiddleware, ok, err } from './ritz.js';
+import {
+  recruitmentEnvelope,
+  recruitmentResponseWrapper,
+  recruitmentErrorHandler,
+  assertEnvelopeIntegrity,
+} from './middleware/recruitment.js';
+assertEnvelopeIntegrity();
 
 const app = express();
 app.set('hive-service', 'hivelaw');
@@ -60,6 +67,9 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '5mb' }));
+
+// Wrap any res.status(N>=400).json() with the recruitment envelope.
+app.use(recruitmentResponseWrapper);
 
 // Audit logging for all API requests
 app.use(auditLog('hivelaw', 'hivelaw'));
@@ -860,6 +870,9 @@ async function start() {
     });
   });
 }
+
+// Recruitment envelope — trailing error handler
+app.use(recruitmentErrorHandler);
 
 start().catch(err => {
   console.error('Failed to start HiveLaw:', err);
